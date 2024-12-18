@@ -1,7 +1,7 @@
 use super::{helpers::*, style::StepItemLayout};
 use glam::{Vec2, Vec3};
 use serde::{Deserialize, Serialize};
-use serde_with::skip_serializing_none;
+use serde_with::{serde_as, skip_serializing_none, DisplayFromStr};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Page {
@@ -48,10 +48,10 @@ pub struct Slot {
     pub ref_resize_bar_left: Option<u8>,
     #[serde(rename = "@refResizeBarRight")]
     pub ref_resize_bar_right: Option<u8>,
-    #[serde(rename = "@refResizeBarBottom")]
-    pub ref_resize_bar_bottom: Option<u8>,
     #[serde(rename = "@refResizeBarTop")]
     pub ref_resize_bar_top: Option<u8>,
+    #[serde(rename = "@refResizeBarBottom")]
+    pub ref_resize_bar_bottom: Option<u8>,
 
     #[serde(rename = "$value")]
     pub content: Vec<SlotContent>,
@@ -69,6 +69,7 @@ pub enum SlotContent {
     Other,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Step {
@@ -92,6 +93,7 @@ pub struct Step {
     pub submodel_preview: SubmodelPreview,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct StepPreview {
     #[serde(rename = "@Depth")]
@@ -102,18 +104,41 @@ pub struct StepPreview {
     pub forced_target_pos_offset: bool,
     #[serde(flatten)]
     pub camera_control: Option<CameraControl>,
+    #[serde(flatten)]
+    pub default_camera_control: Option<DefaultCameraControl>,
 }
 
+#[serde_as]
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct CameraControl {
-    #[serde(rename = "@DefaultCameraControlInfo_cameraScale")]
+    #[serde(rename = "@cameraScale")]
+    #[serde_as(as = "DisplayFromStr")]
+    pub scale: f32,
+    #[serde(rename = "@TargetPos", with = "Vec3Space")]
+    pub pos: Vec3,
+    #[serde(rename = "@cameraAngle", with = "Vec2Space")]
+    pub camera_angle: Vec2,
+    #[serde(default, rename = "@modelAngle", with = "Vec3SpaceOpt")]
+    pub model_angle: Option<Vec3>,
+}
+
+#[serde_as]
+#[skip_serializing_none]
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct DefaultCameraControl {
+    #[serde(default, rename = "@DefaultCameraControlInfo_cameraScale")]
+    #[serde_as(as = "DisplayFromStr")]
     pub scale: f32,
     #[serde(rename = "@DefaultCameraControlInfo_TargetPos", with = "Vec3Space")]
     pub pos: Vec3,
     #[serde(rename = "@DefaultCameraControlInfo_cameraAngle", with = "Vec2Space")]
     pub camera_angle: Vec2,
-    #[serde(rename = "@DefaultCameraControlInfo_modelAngle", with = "Vec3Space")]
-    pub model_angle: Vec3,
+    #[serde(
+        default,
+        rename = "@DefaultCameraControlInfo_modelAngle",
+        with = "Vec3SpaceOpt"
+    )]
+    pub model_angle: Option<Vec3>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]

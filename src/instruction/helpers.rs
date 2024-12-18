@@ -88,6 +88,19 @@ serde_with::serde_conv!(
 );
 
 serde_with::serde_conv!(
+    pub(crate) Vec2SpaceOpt,
+    Option<Vec2>,
+    |v: &Option<Vec2>| {
+        let [x, y] = v.unwrap().to_array();
+        format!("{x} {y}")
+    },
+    |v: &str| -> Result<Option<Vec2>, XmlError> {
+        let [x, y] = separated(v, " ").expect("TODO: better error").map(de_float::<XmlError>);
+        Ok(Some(Vec2::new(x?, y?)))
+    }
+);
+
+serde_with::serde_conv!(
     pub(crate) Vec3Space,
     Vec3,
     |v: &Vec3| {
@@ -97,6 +110,19 @@ serde_with::serde_conv!(
     |v: &str| -> Result<Vec3, XmlError> {
         let [x, y, z] = separated(v, " ").expect("TODO: better error").map(de_float::<XmlError>);
         Ok(Vec3::new(x?, y?, z?))
+    }
+);
+
+serde_with::serde_conv!(
+    pub(crate) Vec3SpaceOpt,
+    Option<Vec3>,
+    |v: &Option<Vec3>| {
+        let [x, y, z] = v.unwrap().to_array();
+        format!("{x} {y} {z}")
+    },
+    |v: &str| -> Result<Option<Vec3>, XmlError> {
+        let [x, y, z] = separated(v, " ").expect("TODO: better error").map(de_float::<XmlError>);
+        Ok(Some(Vec3::new(x?, y?, z?)))
     }
 );
 

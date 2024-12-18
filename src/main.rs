@@ -20,7 +20,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         buf
     };
 
-    let page_design: instruction::Instructions = quick_xml::de::from_str(&xml)?;
+    let xml = tidier::format(xml, true, &Default::default())?;
+
+    let page_design: instruction::Instruction = quick_xml::de::from_str(&xml)?;
 
     // let mut page_design = instruction::Instructions::default();
 
@@ -29,7 +31,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let roundtrip = quick_xml::se::to_string(&page_design)?;
     let roundtrip = tidier::format(roundtrip, true, &Default::default())?;
-    println!("{roundtrip}");
+
+    pretty_assertions::assert_str_eq!(&xml, &roundtrip);
 
     Ok(())
 }

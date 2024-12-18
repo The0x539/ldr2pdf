@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct Instructions {
-    // pub global_setting: GlobalSettings,
+pub struct Instruction {
+    pub global_setting: GlobalSettings,
     pub pages: Pages,
 }
 

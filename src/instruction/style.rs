@@ -1,7 +1,7 @@
 use glam::Vec2;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::{serde_as, skip_serializing_none, DisplayFromStr};
 
 use super::helpers::*;
 use super::LengthUnit;
@@ -122,14 +122,14 @@ pub struct StepNumberStyle {
     #[serde(rename = "@IsVisible", with = "UpperBool")]
     pub visible: bool,
     #[serde(rename = "StepNumber")]
-    pub font: Font,
+    pub font: StepNumberFont,
     #[serde(rename = "Padding")]
     pub padding: Padding,
 }
 
-#[serde_as]
+// fields have a different order
 #[derive(Debug, Default, Serialize, Deserialize)]
-pub struct Font {
+pub struct StepNumberFont {
     #[serde(rename = "@FontFamily")]
     pub family: String,
     #[serde(rename = "@FontStyle")]
@@ -137,8 +137,24 @@ pub struct Font {
     #[serde(rename = "@FontColor")]
     pub color: Color,
     #[serde(rename = "@FontSize")]
+    pub size: u32,
+}
+
+#[skip_serializing_none]
+#[serde_as]
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct Font {
+    #[serde(rename = "@FontSize")]
     #[serde_as(as = "DisplayFromStr")]
     pub size: u32,
+    #[serde(rename = "@FontColor")]
+    pub color: Color,
+    #[serde(rename = "@FontFamily")]
+    pub family: String,
+    #[serde(rename = "@FontStyle")]
+    pub style: FontStyle,
+    #[serde(rename = "@FontOffset", with = "Vec2SpaceOpt", default)]
+    pub offset: Option<Vec2>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -250,6 +266,8 @@ pub struct LengthIndicatorStyle {
     pub use_length_bg_color: bool,
     #[serde(rename = "@BgColor")]
     pub bg_color: Color,
+    #[serde(rename = "@IsUseBorder", with = "UpperBool")]
+    pub use_border: bool,
     #[serde(rename = "@BorderColor")]
     pub border_color: Color,
     #[serde(rename = "@BorderThickness")]
@@ -262,9 +280,17 @@ pub struct LengthIndicatorStyle {
 #[serde(rename_all = "PascalCase")]
 pub struct ColorGuideStyle {
     pub colors: BoxStyle,
-    pub font: Font,
+    pub font: ColorGuideFont,
     pub padding: Padding,
     pub assembly_margin: Spacing,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct ColorGuideFont {
+    #[serde(rename = "@IsVisible", with = "UpperBool")]
+    pub visible: bool,
+    #[serde(flatten)]
+    pub font: Font,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -275,6 +301,8 @@ pub struct CalloutStyle {
     pub step_number: Font,
     pub multiplier: MultiplierStyle,
     pub arrow_style: ArrowStyle,
+    pub padding: Padding,
+    pub margin: Spacing,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -282,7 +310,9 @@ pub struct DividerStyle {
     #[serde(rename = "@IsVisible", with = "UpperBool")]
     pub visible: bool,
     #[serde(rename = "@DividerColor")]
-    pub divider_color: Color,
+    pub color: Color,
+    #[serde(rename = "@DividerThickness")]
+    pub thickness: u32,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
