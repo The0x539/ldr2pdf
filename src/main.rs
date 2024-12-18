@@ -1,13 +1,41 @@
 mod pdf;
 mod resolver;
 
+use std::{fs::File, io::Read};
+
 use ldr::{ColorCode, ColorMap};
 use resolver::Resolver;
 use weldr::SourceMap;
+use zip::ZipArchive;
 
 pub mod instruction;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let xml = {
+        let f = File::open("/home/the0x539/winhome/documents/lego/penbu/penbu.io")?;
+        let mut zip = ZipArchive::new(f)?;
+        let mut ins = zip.by_name("model.ins")?;
+        let mut buf = String::new();
+        ins.read_to_string(&mut buf)?;
+        buf
+    };
+
+    let page_design: instruction::Instructions = quick_xml::de::from_str(&xml)?;
+
+    // let mut page_design = instruction::Instructions::default();
+
+    // page_design.pages.inner.push(Default::default());
+    // page_design.pages.inner[0].slots.push(Default::default());
+
+    let roundtrip = quick_xml::se::to_string(&page_design)?;
+    let roundtrip = tidier::format(roundtrip, true, &Default::default())?;
+    println!("{roundtrip}");
+
+    Ok(())
+}
+
+#[allow(dead_code)]
+fn render_main() -> Result<(), Box<dyn std::error::Error>> {
     // tracing_subscriber::fmt::init();
 
     let resolver = Resolver::new("/home/the0x539/winhome/Documents/lego/mario/Star World.io")?;

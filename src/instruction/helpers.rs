@@ -1,8 +1,11 @@
-use glam::Vec2;
+use glam::{Vec2, Vec3};
 use quick_xml::de::DeError as XmlError;
 use serde::de::{Deserialize, Deserializer, Error, Unexpected, Visitor};
 use serde::ser::{Serialize, Serializer};
+use std::fmt::Write;
 use std::str::FromStr;
+
+use super::page::ResizeBar;
 
 fn separated<'a, const N: usize>(string: &'a str, sep: &str) -> Option<[&'a str; N]> {
     let mut iter = string.split(sep);
@@ -85,6 +88,19 @@ serde_with::serde_conv!(
 );
 
 serde_with::serde_conv!(
+    pub(crate) Vec3Space,
+    Vec3,
+    |v: &Vec3| {
+        let [x, y, z] = v.to_array();
+        format!("{x} {y} {z}")
+    },
+    |v: &str| -> Result<Vec3, XmlError> {
+        let [x, y, z] = separated(v, " ").expect("TODO: better error").map(de_float::<XmlError>);
+        Ok(Vec3::new(x?, y?, z?))
+    }
+);
+
+serde_with::serde_conv!(
     pub(crate) UpperBool,
     bool,
     |v: &bool| if *v { "True" } else { "False" },
@@ -94,3 +110,85 @@ serde_with::serde_conv!(
         _ => Err(format!("Invalid value {v:?}, expected 'True' or 'False'")),
     }
 );
+
+serde_with::serde_conv!(
+    pub(crate) UpperBoolOpt,
+    Option<bool>,
+    |v: &Option<bool>| if *v == Some(true) { "True" } else { "False" },
+    |v: &str| match v {
+        "True" | "true" => Ok(Some(true)),
+        "False" | "false" => Ok(Some(false)),
+        _ => Err(format!("Invalid value {v:?}, expected 'True' or 'False'")),
+    }
+);
+
+pub(crate) mod resize_bar_list {
+    use super::*;
+
+    pub fn serialize<S: Serializer>(list: &[ResizeBar], serializer: S) -> Result<S::Ok, S::Error> {
+        let mut buf = String::new();
+        for bar in list {
+            let vertical = if bar.vertical { "True" } else { "False" };
+            let i1 = bar.ref_index_1;
+            let i2 = bar.ref_index_2;
+            let offset = bar.offset;
+            write!(buf, "{vertical} {i1} {i2} {offset:.2} ").unwrap();
+        }
+        buf.pop();
+        serializer.serialize_str(&buf)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(de: D) -> Result<Vec<ResizeBar>, D::Error> {
+        struct MyVisitor;
+        impl<'de> Visitor<'de> for MyVisitor {
+            type Value = Vec<ResizeBar>;
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a list of resize bar quadruplets, separated by spaces")
+            }
+            fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
+                visit(v)
+            }
+        }
+        de.deserialize_str(MyVisitor)
+    }
+
+    fn visit<E: Error>(v: &str) -> Result<Vec<ResizeBar>, E> {
+        let mut iter = v.split_ascii_whitespace();
+        let mut list = vec![];
+        while let Some(vertical) = iter.next() {
+            let vertical = match vertical {
+                "True" | "true" => true,
+                "False" | "false" => false,
+                _ => {
+                    return Err(E::invalid_value(
+                        Unexpected::Str(vertical),
+                        &"True or False",
+                    ))
+                }
+            };
+
+            let i1 = iter.next().ok_or_else(|| E::missing_field("refIndex1"))?;
+            let ref_index_1 = i1
+                .parse()
+                .map_err(|_| E::invalid_value(Unexpected::Str(i1), &"an integer"))?;
+
+            let i2 = iter.next().ok_or_else(|| E::missing_field("refIndex2"))?;
+            let ref_index_2 = i2
+                .parse()
+                .map_err(|_| E::invalid_value(Unexpected::Str(i2), &"an integer"))?;
+
+            let offset = iter.next().ok_or_else(|| E::missing_field("offset"))?;
+            let offset = offset
+                .parse()
+                .map_err(|_| E::invalid_value(Unexpected::Str(offset), &"a float"))?;
+
+            list.push(ResizeBar {
+                vertical,
+                ref_index_1,
+                ref_index_2,
+                offset,
+            });
+        }
+        Ok(list)
+    }
+}

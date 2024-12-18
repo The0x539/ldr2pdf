@@ -16,14 +16,14 @@ pub struct Style {
     #[serde(rename = "@PaddingUnit")]
     pub padding_unit: LengthUnit,
     pub page: PageStyle,
-    pub step_item_layout: StepItemLayout,
+    pub step_item_layout: StepItemLayoutOuter,
     pub step_number: StepNumberStyle,
     pub parts_list: PartsListStyle,
     pub new_part_highlight: NewPartHighlightStyle,
     pub sub_model_preview: SubModelPreviewStyle,
-    // pub size_guide: SizeGuideStyle,
-    // pub color_guide: ColorGuideStyle,
-    // pub call_out: CalloutStyle,
+    pub size_guide: SizeGuideStyle,
+    pub color_guide: ColorGuideStyle,
+    pub call_out: CalloutStyle,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -54,9 +54,9 @@ pub struct PageStyleInner {
     pub border_thickness: u32,
     #[serde(rename = "@BorderRadius")]
     pub border_radius: u32,
-    #[serde(rename = "@IsUseLineSeparatorColumns")]
+    #[serde(rename = "@IsUseLineSeparatorColumns", with = "UpperBool")]
     pub use_line_separator_columns: bool,
-    #[serde(rename = "@IsUseLineSeparatorRows")]
+    #[serde(rename = "@IsUseLineSeparatorRows", with = "UpperBool")]
     pub use_line_separator_rows: bool,
     #[serde(rename = "@LineSeperatorColor")]
     pub line_separator_color: Color,
@@ -75,14 +75,14 @@ pub enum ImageDisplay {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
-pub struct StepItemLayout {
+pub struct StepItemLayoutOuter {
     #[serde(rename = "StepCompLayout")]
-    pub inner: StepItemLayoutInner,
+    pub inner: StepItemLayout,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct StepItemLayoutInner {
+pub struct StepItemLayout {
     #[serde(rename = "@refCount")]
     pub ref_count: u32,
     pub left_top: SnappableComponentList,
@@ -206,8 +206,8 @@ pub struct NewPartHighlightStyle {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Highlight {
-    #[serde(rename = "@UseHighight", with = "UpperBool")]
-    pub use_highight: bool,
+    #[serde(rename = "@IsUseHighlight", with = "UpperBool")]
+    pub use_highlight: bool,
     #[serde(rename = "@Thickness")]
     pub thickness: u32,
     #[serde(rename = "@Color")]
@@ -309,23 +309,4 @@ pub enum Arrowhead {
     CircleEmpty,
     CircleFilled,
     Line,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn foo() {
-        let mut s = Style::default();
-        s.step_item_layout
-            .inner
-            .left_top
-            .inner
-            .push(Default::default());
-        let xml = quick_xml::se::to_string(&s).unwrap();
-        println!("{xml}");
-        let _ss: Style = quick_xml::de::from_str(&xml).unwrap();
-        panic!()
-    }
 }

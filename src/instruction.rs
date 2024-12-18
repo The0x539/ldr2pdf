@@ -1,16 +1,38 @@
-use glam::{Vec2, Vec4};
+use glam::Vec2;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct Instructions {
-    pub page_setup: PageSetup,
+    // pub global_setting: GlobalSettings,
+    pub pages: Pages,
 }
 
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct GlobalSettings {
+    pub page_setup: PageSetup,
+    pub global_style: style::Style,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct Pages {
+    #[serde(rename = "Page", default)]
+    pub inner: Vec<page::Page>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct PageSetup {
     pub paper_type: PaperType,
     pub length_unit: LengthUnit,
+    #[serde(with = "helpers::Vec2Space")]
     pub custom_size: Vec2,
+    #[serde(rename = "IsPortrait", with = "helpers::UpperBool")]
     pub portrait: bool,
-    pub margins: Vec4,
+    #[serde(with = "helpers::Arr4Space")]
+    pub margins: [f32; 4],
+    #[serde(rename = "UseCMYKColorTable", with = "helpers::UpperBool")]
     pub use_cmyk_color_table: bool,
 }
 
@@ -34,6 +56,7 @@ pub enum PaperType {
     Custom,
 }
 
+pub mod page;
 pub mod style;
 
 mod helpers;
