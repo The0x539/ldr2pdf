@@ -1,6 +1,7 @@
 use glam::Vec2;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_with::{serde_as, DisplayFromStr};
 
 use super::helpers::*;
 use super::LengthUnit;
@@ -20,9 +21,9 @@ pub struct Style {
     pub parts_list: PartsListStyle,
     pub new_part_highlight: NewPartHighlightStyle,
     pub sub_model_preview: SubModelPreviewStyle,
-    pub size_guide: SizeGuideStyle,
-    pub color_guide: ColorGuideStyle,
-    pub call_out: CalloutStyle,
+    // pub size_guide: SizeGuideStyle,
+    // pub color_guide: ColorGuideStyle,
+    // pub call_out: CalloutStyle,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -126,6 +127,7 @@ pub struct StepNumberStyle {
     pub padding: Padding,
 }
 
+#[serde_as]
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Font {
     #[serde(rename = "@FontFamily")]
@@ -135,6 +137,7 @@ pub struct Font {
     #[serde(rename = "@FontColor")]
     pub color: Color,
     #[serde(rename = "@FontSize")]
+    #[serde_as(as = "DisplayFromStr")]
     pub size: u32,
 }
 
