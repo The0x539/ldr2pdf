@@ -164,21 +164,27 @@ pub struct PartList {
 
 #[skip_serializing_none]
 #[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct SubmodelPreview {
     #[serde(rename = "@Depth")]
     pub depth: i32,
     #[serde(rename = "@Position", with = "Vec2Space")]
     pub position: Vec2,
-    #[serde(rename = "Orientation")]
     pub orientation: Option<CameraControl>,
-    #[serde(rename = "Multiplier")]
+    pub colors: Option<BoxStyle>,
     pub multiplier: Multiplier,
+    pub padding: Option<Padding>,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Multiplier {
+    #[serde(default, rename = "@IsVisible", with = "UpperBoolOpt")]
+    pub visible: Option<bool>,
     #[serde(rename = "@Position", with = "Vec2Space")]
     pub position: Vec2,
+    #[serde(flatten)]
+    pub font: Option<Font>,
 }
 
 #[serde_as]
