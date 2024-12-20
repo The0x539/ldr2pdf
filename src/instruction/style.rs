@@ -1,4 +1,5 @@
 use glam::Vec2;
+use glam::Vec3;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::{serde_as, skip_serializing_none, DisplayFromStr};
@@ -155,6 +156,21 @@ pub struct Font {
     pub style: FontStyle,
     #[serde(rename = "@FontOffset", with = "Vec2SpaceOpt", default)]
     pub offset: Option<Vec2>,
+}
+
+#[skip_serializing_none]
+#[serde_as]
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct TextboxFont {
+    #[serde(rename = "@FontFamily")]
+    pub family: String,
+    #[serde(rename = "@FontStyle")]
+    pub style: FontStyle,
+    #[serde(rename = "@FontSize")]
+    #[serde_as(as = "DisplayFromStr")]
+    pub size: u32,
+    #[serde(rename = "@FontColor", with = "Vec3Space")]
+    pub color: Vec3,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]

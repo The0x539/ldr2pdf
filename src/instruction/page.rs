@@ -1,7 +1,7 @@
 use super::helpers::*;
 use super::style::{
     ArrowStyle, BoxStyle, CalloutDividerStyle, CalloutMultiplierStyle, Font, Padding, Spacing,
-    StepItemLayout,
+    StepItemLayout, TextboxFont,
 };
 use glam::{Vec2, Vec3};
 use serde::{Deserialize, Serialize};
@@ -69,6 +69,7 @@ pub enum SlotContent {
     #[serde(rename = "BOM")]
     Bom(Bom),
     Image(Image),
+    Text(Text),
     #[default]
     #[serde(other)]
     Other,
@@ -180,12 +181,30 @@ pub struct Multiplier {
     pub position: Vec2,
 }
 
+#[serde_as]
 #[derive(Debug, Default, Serialize, Deserialize)]
-pub struct Image {
+pub struct DepthRectLower {
     #[serde(rename = "@depth")]
+    #[serde_as(as = "DisplayFromStr")]
     pub depth: i32,
     #[serde(rename = "@rect", with = "Arr4Space")]
     pub rect: [f32; 4],
+}
+
+#[serde_as]
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct DepthRectUpper {
+    #[serde(rename = "@Depth")]
+    #[serde_as(as = "DisplayFromStr")]
+    pub depth: i32,
+    #[serde(rename = "@Rect", with = "Arr4Space")]
+    pub rect: [f32; 4],
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct Image {
+    #[serde(flatten)]
+    pub bounds: DepthRectLower,
     #[serde(rename = "@rotation")]
     pub rotation: i32,
     #[serde(rename = "@fliped_H", with = "UpperBool")]
@@ -208,10 +227,8 @@ pub struct Callout {
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct CalloutItemData {
-    #[serde(rename = "@Depth")]
-    pub depth: i32,
-    #[serde(rename = "@Rect", with = "Arr4Space")]
-    pub rect: [f32; 4],
+    #[serde(flatten)]
+    pub bounds: DepthRectUpper,
     #[serde(rename = "@CalloutGridMaxPerLine")]
     pub max_per_line: u32,
     #[serde(rename = "@IsCalloutAsRows", with = "UpperBool")]
@@ -249,6 +266,52 @@ pub struct CalloutStepItemData {
 pub struct CalloutArrowItemData {
     #[serde(rename = "@ArrowPosition", with = "Arr4Space")]
     pub arrow_position: [f32; 4],
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct Text {
+    #[serde(flatten)]
+    pub bounds: DepthRectUpper,
+    #[serde(rename = "@Rotation")]
+    pub rotation: i32,
+    #[serde(rename = "@TextValue")]
+    pub text_value: String,
+    #[serde(flatten)]
+    pub font: TextboxFont,
+
+    #[serde(rename = "@LetterSpacing")]
+    pub letter_spacing: u32,
+    #[serde(rename = "@LineHeight")]
+    pub line_height: u32,
+    #[serde(rename = "@HAlign")]
+    pub h_align: HorizontalAlign,
+    #[serde(rename = "@VAlign")]
+    pub v_align: VerticalAlign,
+    #[serde(rename = "@ShowBorder", with = "UpperBool")]
+    pub show_border: bool,
+    #[serde(rename = "@BorderColor", with = "Vec3Space")]
+    pub border_color: Vec3,
+    #[serde(rename = "@BorderThickness")]
+    pub border_thickness: u32,
+    #[serde(rename = "@BorderRadius")]
+    pub border_radius: u32,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub enum HorizontalAlign {
+    #[default]
+    Left,
+    Center,
+    Right,
+    Justify,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub enum VerticalAlign {
+    #[default]
+    Top,
+    Center,
+    Bottom,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]

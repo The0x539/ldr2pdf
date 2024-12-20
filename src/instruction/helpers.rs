@@ -73,8 +73,14 @@ fn shorter(a: String, b: String) -> String {
 fn spaces(values: &[f32]) -> String {
     let mut buf = String::new();
     for &val in values {
-        let s = shorter(val.to_string(), format!("{val:E}").replace("E-", "E-0"));
-        write!(buf, "{} ", s).unwrap();
+        let mut scientific = format!("{val:E}");
+        // replace E-1 with E-01, but not E-14 with E-014
+        if scientific.chars().nth_back(1) == Some('-') {
+            scientific.insert(scientific.len() - 1, '0');
+        }
+        let s = shorter(val.to_string(), scientific);
+        buf.push_str(&s);
+        buf.push(' ');
     }
     buf.pop();
     buf
