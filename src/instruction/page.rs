@@ -1,12 +1,13 @@
 use super::helpers::*;
 use super::style::{
-    ArrowStyle, BoxStyle, CalloutDividerStyle, CalloutMultiplierStyle, Font, Padding, Spacing,
-    StepItemLayout, TextboxFont,
+    ArrowStyle, BoxStyle, CalloutDividerStyle, CalloutMultiplierStyle, Font, Padding,
+    PageStyleInner, Spacing, StepItemLayout, TextboxFont,
 };
 use glam::{Vec2, Vec3};
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, skip_serializing_none, DisplayFromStr};
 
+#[skip_serializing_none]
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Page {
     #[serde(rename = "@template")]
@@ -16,6 +17,13 @@ pub struct Page {
     pub resize_bars: Vec<ResizeBar>,
     #[serde(rename = "@IsLocked", with = "UpperBool")]
     pub locked: bool,
+
+    #[serde(flatten)]
+    pub style: Option<PageStyleInner>,
+
+    #[serde(default, rename = "@SlotSpacing", with = "Vec2SpaceOpt")]
+    pub slot_spacing: Option<Vec2>,
+
     #[serde(rename = "Slot")]
     pub slots: Vec<Slot>,
 }

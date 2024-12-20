@@ -35,6 +35,7 @@ pub struct PageStyle {
     pub inner: PageStyleInner,
 }
 
+#[serde_as]
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct PageStyleInner {
     #[serde(rename = "@IsUseBgColor", with = "UpperBool")]
@@ -46,14 +47,17 @@ pub struct PageStyleInner {
     #[serde(rename = "@BgImageDisplayT")]
     pub bg_image_display_type: ImageDisplay,
     #[serde(rename = "@BgImageScale")]
+    #[serde_as(as = "DisplayFromStr")]
     pub bg_image_scale: f32,
     #[serde(rename = "@IsUseBorder", with = "UpperBool")]
     pub use_border: bool,
     #[serde(rename = "@BorderColor")]
     pub border_color: Color,
     #[serde(rename = "@BorderThickness")]
+    #[serde_as(as = "DisplayFromStr")]
     pub border_thickness: u32,
     #[serde(rename = "@BorderRadius")]
+    #[serde_as(as = "DisplayFromStr")]
     pub border_radius: u32,
     #[serde(rename = "@IsUseLineSeparatorColumns", with = "UpperBool")]
     pub use_line_separator_columns: bool,
@@ -62,6 +66,7 @@ pub struct PageStyleInner {
     #[serde(rename = "@LineSeperatorColor")]
     pub line_separator_color: Color,
     #[serde(rename = "@LineSeperatorThickness")]
+    #[serde_as(as = "DisplayFromStr")]
     pub line_separator_thickness: u32,
 }
 
