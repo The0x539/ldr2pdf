@@ -155,12 +155,15 @@ pub struct PartList {
     pub depth: i32,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct SubmodelPreview {
     #[serde(rename = "@Depth")]
     pub depth: i32,
     #[serde(rename = "@Position", with = "Vec2Space")]
     pub position: Vec2,
+    #[serde(rename = "Orientation")]
+    pub orientation: Option<CameraControl>,
     #[serde(rename = "Multiplier")]
     pub multiplier: Multiplier,
 }

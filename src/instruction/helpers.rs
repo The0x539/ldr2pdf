@@ -62,12 +62,28 @@ impl<'de> Deserialize<'de> for Color {
     }
 }
 
+fn shorter(a: String, b: String) -> String {
+    if a.len() <= b.len() {
+        a
+    } else {
+        b
+    }
+}
+
+fn spaces(values: &[f32]) -> String {
+    let mut buf = String::new();
+    for &val in values {
+        let s = shorter(val.to_string(), format!("{val:E}").replace("E-", "E-0"));
+        write!(buf, "{} ", s).unwrap();
+    }
+    buf.pop();
+    buf
+}
+
 serde_with::serde_conv!(
     pub(crate) Arr4Space,
     [f32; 4],
-    |[x, y, z, w]: &[f32; 4]| {
-        format!("{x} {y} {z} {w}")
-    },
+    spaces,
     |v: &str| -> Result<[f32; 4], XmlError> {
         let [x, y, z, w] = separated(v, " ").expect("TODO: better error").map(de_float::<XmlError>);
         Ok([x?, y?, z?, w?])
@@ -77,10 +93,7 @@ serde_with::serde_conv!(
 serde_with::serde_conv!(
     pub(crate) Vec2Space,
     Vec2,
-    |v: &Vec2| {
-        let [x, y] = v.to_array();
-        format!("{x} {y}")
-    },
+    |v: &Vec2| spaces(&v.to_array()),
     |v: &str| -> Result<Vec2, XmlError> {
         let [x, y] = separated(v, " ").expect("TODO: better error").map(de_float::<XmlError>);
         Ok(Vec2::new(x?, y?))
@@ -90,10 +103,7 @@ serde_with::serde_conv!(
 serde_with::serde_conv!(
     pub(crate) Vec2SpaceOpt,
     Option<Vec2>,
-    |v: &Option<Vec2>| {
-        let [x, y] = v.unwrap().to_array();
-        format!("{x} {y}")
-    },
+    |v: &Option<Vec2>| spaces(&v.unwrap().to_array()),
     |v: &str| -> Result<Option<Vec2>, XmlError> {
         let [x, y] = separated(v, " ").expect("TODO: better error").map(de_float::<XmlError>);
         Ok(Some(Vec2::new(x?, y?)))
@@ -103,10 +113,7 @@ serde_with::serde_conv!(
 serde_with::serde_conv!(
     pub(crate) Vec3Space,
     Vec3,
-    |v: &Vec3| {
-        let [x, y, z] = v.to_array();
-        format!("{x} {y} {z}")
-    },
+    |v: &Vec3| spaces(&v.to_array()),
     |v: &str| -> Result<Vec3, XmlError> {
         let [x, y, z] = separated(v, " ").expect("TODO: better error").map(de_float::<XmlError>);
         Ok(Vec3::new(x?, y?, z?))
@@ -116,10 +123,7 @@ serde_with::serde_conv!(
 serde_with::serde_conv!(
     pub(crate) Vec3SpaceOpt,
     Option<Vec3>,
-    |v: &Option<Vec3>| {
-        let [x, y, z] = v.unwrap().to_array();
-        format!("{x} {y} {z}")
-    },
+    |v: &Option<Vec3>| spaces(&v.unwrap().to_array()),
     |v: &str| -> Result<Option<Vec3>, XmlError> {
         let [x, y, z] = separated(v, " ").expect("TODO: better error").map(de_float::<XmlError>);
         Ok(Some(Vec3::new(x?, y?, z?)))
@@ -158,7 +162,12 @@ pub(crate) mod resize_bar_list {
             let i1 = bar.ref_index_1;
             let i2 = bar.ref_index_2;
             let offset = bar.offset;
-            write!(buf, "{vertical} {i1} {i2} {offset:.2} ").unwrap();
+            write!(
+                buf,
+                "{vertical} {i1} {i2} {} ",
+                shorter(offset.to_string(), format!("{offset:.2}"))
+            )
+            .unwrap();
         }
         buf.pop();
         serializer.serialize_str(&buf)
