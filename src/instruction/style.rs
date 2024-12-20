@@ -249,6 +249,14 @@ pub struct MultiplierStyle {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
+pub struct CalloutMultiplierStyle {
+    #[serde(rename = "@IsShowMultiplier", with = "UpperBool")]
+    pub visible: bool,
+    #[serde(flatten)]
+    pub font: Font,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct SizeGuideStyle {
     pub colors: BoxStyle,
@@ -308,6 +316,16 @@ pub struct CalloutStyle {
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct DividerStyle {
     #[serde(rename = "@IsVisible", with = "UpperBool")]
+    pub visible: bool,
+    #[serde(rename = "@DividerColor")]
+    pub color: Color,
+    #[serde(rename = "@DividerThickness")]
+    pub thickness: u32,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct CalloutDividerStyle {
+    #[serde(rename = "@IsShowDivider", with = "UpperBool")]
     pub visible: bool,
     #[serde(rename = "@DividerColor")]
     pub color: Color,

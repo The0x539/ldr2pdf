@@ -32,7 +32,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let roundtrip = quick_xml::se::to_string(&page_design)?;
     let roundtrip = tidier::format(roundtrip, true, &Default::default())?;
 
-    pretty_assertions::assert_str_eq!(&xml, &roundtrip);
+    if xml != roundtrip {
+        let line_index = xml
+            .lines()
+            .zip(roundtrip.lines())
+            .position(|(a, b)| a != b)
+            .unwrap_or(0);
+
+        let byte_index = xml.lines().take(line_index).map(|l| l.len()).sum();
+
+        pretty_assertions::assert_str_eq!(&xml[byte_index..], &roundtrip[byte_index..]);
+    }
+    // pretty_assertions::assert_str_eq!(&xml, &roundtrip);
 
     Ok(())
 }

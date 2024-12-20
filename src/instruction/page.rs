@@ -1,4 +1,8 @@
-use super::{helpers::*, style::StepItemLayout};
+use super::helpers::*;
+use super::style::{
+    ArrowStyle, BoxStyle, CalloutDividerStyle, CalloutMultiplierStyle, Font, Padding, Spacing,
+    StepItemLayout,
+};
 use glam::{Vec2, Vec3};
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, skip_serializing_none, DisplayFromStr};
@@ -64,6 +68,7 @@ pub enum SlotContent {
     Step(Step),
     #[serde(rename = "BOM")]
     Bom(Bom),
+    Image(Image),
     #[default]
     #[serde(other)]
     Other,
@@ -91,6 +96,7 @@ pub struct Step {
     pub step_number: StepNumber,
     pub part_list: PartList,
     pub submodel_preview: SubmodelPreview,
+    pub call_out: Option<Callout>,
 }
 
 #[skip_serializing_none]
@@ -172,6 +178,77 @@ pub struct SubmodelPreview {
 pub struct Multiplier {
     #[serde(rename = "@Position", with = "Vec2Space")]
     pub position: Vec2,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct Image {
+    #[serde(rename = "@depth")]
+    pub depth: i32,
+    #[serde(rename = "@rect", with = "Arr4Space")]
+    pub rect: [f32; 4],
+    #[serde(rename = "@rotation")]
+    pub rotation: i32,
+    #[serde(rename = "@fliped_H", with = "UpperBool")]
+    pub flipped_h: bool,
+    #[serde(rename = "@fliped_V", with = "UpperBool")]
+    pub flipped_v: bool,
+    #[serde(rename = "@opacity")]
+    pub opacity: f32,
+    #[serde(rename = "@imagePath")]
+    pub image_path: String,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct Callout {
+    #[serde(rename = "CallOutItemData")]
+    pub item_data: Vec<CalloutItemData>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct CalloutItemData {
+    #[serde(rename = "@Depth")]
+    pub depth: i32,
+    #[serde(rename = "@Rect", with = "Arr4Space")]
+    pub rect: [f32; 4],
+    #[serde(rename = "@CalloutGridMaxPerLine")]
+    pub max_per_line: u32,
+    #[serde(rename = "@IsCalloutAsRows", with = "UpperBool")]
+    pub as_rows: bool,
+    #[serde(rename = "@MultiplierPosition", with = "Vec2Space")]
+    pub multiplier_position: Vec2,
+    #[serde(rename = "@MultiplierValue")]
+    pub multiplier_value: u32,
+    #[serde(rename = "@IsUseGlobalStyle", with = "UpperBool")]
+    pub use_global_style: bool,
+
+    pub colors: Option<BoxStyle>,
+    pub divider: Option<CalloutDividerStyle>,
+    pub step_number: Option<Font>,
+    pub multiplier: Option<CalloutMultiplierStyle>,
+    pub arrow: Option<ArrowStyle>,
+    pub padding: Option<Padding>,
+    pub margin: Option<Spacing>,
+
+    #[serde(rename = "CallOutStepItemData")]
+    pub steps: Vec<CalloutStepItemData>,
+    #[serde(rename = "CallOutArrowItemData")]
+    pub arrows: Vec<CalloutArrowItemData>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct CalloutStepItemData {
+    pub step: Step,
+    pub orientation: Option<CameraControl>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct CalloutArrowItemData {
+    #[serde(rename = "@ArrowPosition", with = "Arr4Space")]
+    pub arrow_position: [f32; 4],
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
