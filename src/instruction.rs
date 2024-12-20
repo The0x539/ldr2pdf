@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 pub struct Instruction {
     pub global_setting: GlobalSettings,
     pub pages: Pages,
+    pub custom_layouts: (),
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]

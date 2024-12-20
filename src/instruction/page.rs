@@ -329,4 +329,78 @@ pub enum VerticalAlign {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
-pub struct Bom {}
+#[serde(rename_all = "PascalCase")]
+pub struct Bom {
+    #[serde(rename = "@id")]
+    pub id: u32,
+    #[serde(rename = "@index")]
+    pub index: u32,
+    #[serde(rename = "@Depth")]
+    pub depth: i32,
+    #[serde(rename = "@useCostomizeContentRect", with = "UpperBool")]
+    pub customize_content_rect: bool,
+    #[serde(rename = "@rect")]
+    pub rect: [f32; 4],
+    #[serde(rename = "@IsShownAsRow", with = "UpperBool")]
+    pub shown_as_row: bool,
+    #[serde(rename = "@OrderBy")]
+    pub order_by: BomOrder,
+
+    pub part_size: BomPartSize,
+    pub colors: BomColors,
+    pub label: BomLabelStyle,
+    pub padding: Padding,
+    pub assembly_margin: Spacing,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub enum BomOrder {
+    #[serde(rename = "Color_Size_Ascending")]
+    #[default]
+    ColorSizeAscending,
+    #[serde(rename = "Color_Size_Descending")]
+    ColorSizeDescending,
+    #[serde(rename = "Part_Size_Ascending")]
+    PartSizeAscending,
+    #[serde(rename = "Part_Size_Descending")]
+    PartSizeDescending,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct BomPartSize {
+    #[serde(rename = "@Scale")]
+    pub scale: f32,
+    #[serde(rename = "@EnableLargeBrickScale", with = "UpperBool")]
+    pub enable_large_brick_scale: bool,
+    #[serde(rename = "@LargeBrickScale")]
+    pub large_brick_scale: f32,
+    #[serde(rename = "@EnableLargeBrickSeparatePage", with = "UpperBool")]
+    pub enable_large_brick_separate_page: bool,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct BomColors {
+    #[serde(rename = "@IsUseBgColor", with = "UpperBool")]
+    pub use_bg_color: bool,
+    #[serde(rename = "@IsUseBorder", with = "UpperBool")]
+    pub use_border: bool,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct BomLabelStyle {
+    #[serde(rename = "@IdStyle")]
+    pub id_style: BomIdStyle,
+    #[serde(flatten)]
+    pub font: Font,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub enum BomIdStyle {
+    #[default]
+    #[serde(rename = "ItemNo_ColorCode")]
+    ItemNoColorCode,
+    #[serde(rename = "ItemNo_ColorName")]
+    ItemNoColorName,
+    ElementID,
+    DoNotShow,
+}

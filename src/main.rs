@@ -37,9 +37,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .lines()
             .zip(roundtrip.lines())
             .position(|(a, b)| a != b)
-            .unwrap_or(0);
+            .unwrap_or(0)
+            .saturating_sub(10);
 
-        let byte_index = xml.lines().take(line_index).map(|l| l.len()).sum();
+        let byte_index = xml.lines().take(line_index).map(|l| l.len() + 1).sum();
 
         pretty_assertions::assert_str_eq!(&xml[byte_index..], &roundtrip[byte_index..]);
     }
