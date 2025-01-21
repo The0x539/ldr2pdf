@@ -2,7 +2,8 @@ use glam::{Vec2, Vec3};
 use quick_xml::de::DeError as XmlError;
 use serde::de::{Deserialize, Deserializer, Error, Unexpected, Visitor};
 use serde::ser::{Serialize, Serializer};
-use std::fmt::Write;
+use serde_with::{DeserializeAs, DisplayFromStr};
+use std::fmt::{Display, Write};
 use std::str::FromStr;
 
 use super::page::ResizeBar;
@@ -158,6 +159,15 @@ serde_with::serde_conv!(
     }
 );
 
+pub(crate) fn option_from_str<'de, D, T>(de: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: FromStr,
+    T::Err: Display,
+{
+    DisplayFromStr::deserialize_as(de).map(Some)
+}
+
 pub(crate) mod resize_bar_list {
     use super::*;
 
@@ -168,14 +178,10 @@ pub(crate) mod resize_bar_list {
             let i1 = bar.ref_index_1;
             let i2 = bar.ref_index_2;
             let offset = bar.offset;
-            write!(
-                buf,
-                "{vertical} {i1} {i2} {} ",
-                shorter(offset.to_string(), format!("{offset:.2}"))
-            )
-            .unwrap();
+            let offset_str = shorter(offset.to_string(), format!("{offset:.2}"));
+            write!(buf, "{vertical} {i1} {i2} {offset_str} ").unwrap();
         }
-        buf.pop();
+        assert_eq!(buf.pop(), Some(' '));
         serializer.serialize_str(&buf)
     }
 

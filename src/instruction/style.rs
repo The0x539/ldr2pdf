@@ -36,29 +36,40 @@ pub struct PageStyle {
 }
 
 #[serde_as]
+#[skip_serializing_none]
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct PageStyleInner {
     #[serde(rename = "@IsUseBgColor", with = "UpperBool")]
     pub use_bg_color: bool,
     #[serde(rename = "@BgColor")]
-    pub bg_color: Color,
+    pub bg_color: Option<Color>,
     #[serde(rename = "@BgImage")]
-    pub bg_image: String,
+    pub bg_image: Option<String>,
     #[serde(rename = "@BgImageDisplayT")]
-    pub bg_image_display_type: ImageDisplay,
-    #[serde(rename = "@BgImageScale")]
-    #[serde_as(as = "DisplayFromStr")]
-    pub bg_image_scale: f32,
+    pub bg_image_display_type: Option<ImageDisplay>,
+    #[serde(
+        rename = "@BgImageScale",
+        default,
+        deserialize_with = "option_from_str"
+    )]
+    pub bg_image_scale: Option<f32>,
+
     #[serde(rename = "@IsUseBorder", with = "UpperBool")]
     pub use_border: bool,
     #[serde(rename = "@BorderColor")]
-    pub border_color: Color,
-    #[serde(rename = "@BorderThickness")]
-    #[serde_as(as = "DisplayFromStr")]
-    pub border_thickness: u32,
+    pub border_color: Option<Color>,
+    #[serde(
+        rename = "@BorderThickness",
+        default,
+        deserialize_with = "option_from_str"
+    )]
+    pub border_thickness: Option<u32>,
+
+    // "corner" radius - used even when border is absent?
     #[serde(rename = "@BorderRadius")]
     #[serde_as(as = "DisplayFromStr")]
     pub border_radius: u32,
+
     #[serde(rename = "@IsUseLineSeparatorColumns", with = "UpperBool")]
     pub use_line_separator_columns: bool,
     #[serde(rename = "@IsUseLineSeparatorRows", with = "UpperBool")]

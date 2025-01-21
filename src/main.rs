@@ -1,34 +1,48 @@
+pub mod instruction;
+mod ldr;
 mod pdf;
 mod resolver;
 
-use std::{fs::File, io::Read};
+use std::{collections::HashSet, fs::File, io::Read};
 
 use ldr::{ColorCode, ColorMap};
 use resolver::Resolver;
 use weldr::SourceMap;
 use zip::ZipArchive;
 
-pub mod instruction;
+type Result<T, E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let xml = {
-        let f = File::open("/home/the0x539/winhome/documents/lego/penbu/penbu.io")?;
-        let mut zip = ZipArchive::new(f)?;
-        let mut ins = zip.by_name("model.ins")?;
-        let mut buf = String::new();
-        ins.read_to_string(&mut buf)?;
-        buf
-    };
+fn main() -> Result<()> {
+    let args = std::env::args().collect::<HashSet<_>>();
+    if args.contains("xml") {
+        xml_main()?;
+    }
+    if args.contains("pdf") {
+        render_main()?;
+    }
+    if args.contains("fmt") {
+        fmt_main()?;
+    }
+    Ok(())
+}
+
+fn read_model_ins(path: impl AsRef<std::path::Path>) -> Result<String, zip::result::ZipError> {
+    let f = File::open(path)?;
+    let mut zip = ZipArchive::new(f)?;
+    let mut ins = zip.by_name("model.ins")?;
+    let mut buf = String::new();
+    ins.read_to_string(&mut buf)?;
+    Ok(buf)
+}
+
+fn xml_main() -> Result<()> {
+    // let path = "/home/the0x539/winhome/documents/lego/penbu/penbu.io";
+    let path = "/home/the0x539/winhome/documents/lego/penbu/other chuuba/soymilk/soymilk.io";
+    let xml = read_model_ins(path)?;
 
     let xml = tidier::format(xml, true, &Default::default())?;
 
     let page_design: instruction::Instruction = quick_xml::de::from_str(&xml)?;
-
-    // let mut page_design = instruction::Instructions::default();
-
-    // page_design.pages.inner.push(Default::default());
-    // page_design.pages.inner[0].slots.push(Default::default());
-
     let roundtrip = quick_xml::se::to_string(&page_design)?;
     let roundtrip = tidier::format(roundtrip, true, &Default::default())?;
 
@@ -40,17 +54,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap_or(0)
             .saturating_sub(10);
 
+        println!("line {line_index}");
         let byte_index = xml.lines().take(line_index).map(|l| l.len() + 1).sum();
 
         pretty_assertions::assert_str_eq!(&xml[byte_index..], &roundtrip[byte_index..]);
     }
-    // pretty_assertions::assert_str_eq!(&xml, &roundtrip);
+
+    println!("round trip successful for {path}");
 
     Ok(())
 }
 
-#[allow(dead_code)]
-fn render_main() -> Result<(), Box<dyn std::error::Error>> {
+fn render_main() -> Result<()> {
     // tracing_subscriber::fmt::init();
 
     let resolver = Resolver::new("/home/the0x539/winhome/Documents/lego/mario/Star World.io")?;
@@ -136,4 +151,15 @@ impl VectorData {
     }
 }
 
-mod ldr;
+fn fmt_main() -> Result<()> {
+    let Some(path) = std::env::args().find(|a| a.ends_with(".io")) else {
+        eprintln!("no path specified");
+        return Ok(());
+    };
+
+    let xml = read_model_ins(&path)?;
+    let pretty = tidier::format(&xml, true, &Default::default())?;
+    println!("{pretty}");
+
+    Ok(())
+}

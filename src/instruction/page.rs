@@ -104,7 +104,7 @@ pub struct Step {
     pub step_preview: StepPreview,
     pub step_number: StepNumber,
     pub part_list: PartList,
-    pub submodel_preview: SubmodelPreview,
+    pub submodel_preview: Option<SubmodelPreview>,
     pub call_out: Option<Callout>,
 }
 
@@ -264,7 +264,7 @@ pub struct CalloutItemData {
 
     #[serde(rename = "CallOutStepItemData")]
     pub steps: Vec<CalloutStepItemData>,
-    #[serde(rename = "CallOutArrowItemData")]
+    #[serde(rename = "CallOutArrowItemData", default)]
     pub arrows: Vec<CalloutArrowItemData>,
 }
 

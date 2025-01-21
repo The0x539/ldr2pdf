@@ -1,6 +1,12 @@
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
 
+pub mod page;
+pub mod style;
+
+mod helpers;
+pub use helpers::Color;
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Instruction {
@@ -56,9 +62,3 @@ pub enum PaperType {
     A4,
     Custom,
 }
-
-pub mod page;
-pub mod style;
-
-mod helpers;
-pub use helpers::Color;
