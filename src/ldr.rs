@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Poly, VectorData};
+use crate::{Point, Poly, Primitive};
 use slab::Slab;
 use weldr::{ColourCmd, Command, Mat4, SourceMap, Vec3};
 
@@ -8,7 +8,7 @@ pub fn traverse(
     source_map: &SourceMap,
     model_name: &str,
     ctx: GeometryContext,
-    output: &mut VectorData,
+    output: &mut Vec<Primitive>,
 ) {
     let Some(model) = source_map.get(model_name) else {
         panic!("{model_name}");
@@ -21,17 +21,17 @@ pub fn traverse(
                 traverse(source_map, &sfrc.file, ctx.child(sfrc), output);
             }
             Command::Line(line) => {
-                output.lines.push(ctx.project(line.vertices));
+                output.push(Primitive::Line(ctx.project(line.vertices)));
             }
             Command::Triangle(t) => {
                 let color = new_color(ctx.color, t.color);
                 let poly = Poly::Tri(ctx.project(t.vertices));
-                output.polygons.push((poly, color));
+                output.push(Primitive::Polygon(poly, color));
             }
             Command::Quad(q) => {
                 let color = new_color(ctx.color, q.color);
                 let poly = Poly::Quad(ctx.project(q.vertices));
-                output.polygons.push((poly, color));
+                output.push(Primitive::Polygon(poly, color));
             }
             _ => {}
         }
@@ -65,10 +65,8 @@ impl GeometryContext {
         }
     }
 
-    pub fn project<const N: usize>(&self, vertices: [Vec3; N]) -> [[f32; 2]; N] {
-        vertices
-            .map(|v| self.transform.transform_point3(v))
-            .map(|v| [v.x, v.y])
+    pub fn project<const N: usize>(&self, vertices: [Vec3; N]) -> [Point; N] {
+        vertices.map(|v| self.transform.transform_point3(v))
     }
 }
 

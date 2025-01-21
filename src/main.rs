@@ -86,47 +86,43 @@ fn xml_main(path: impl AsRef<std::path::Path>) -> Result<()> {
 fn render_main() -> Result<()> {
     // tracing_subscriber::fmt::init();
 
-    let resolver = Resolver::new("/home/the0x539/winhome/Documents/lego/mario/Star World.io")?;
+    let resolver = Resolver::new("/home/the0x539/winhome/Documents/lego/penbu/ket.io")?;
     let mut source_map = SourceMap::new();
-    let main_model_name = weldr::parse("Star World.io", &resolver, &mut source_map)?;
+    let main_model_name = weldr::parse("ket.io", &resolver, &mut source_map)?;
 
     let color_map = ColorMap::load("/mnt/c/Program Files/Studio 2.0/ldraw/LDConfig.ldr")?;
 
-    let mut vector_data = VectorData::default();
+    let mut shapes = Vec::new();
 
     let ctx = ldr::GeometryContext::new();
-    ldr::traverse(&source_map, &main_model_name, ctx, &mut vector_data);
+    ldr::traverse(&source_map, &main_model_name, ctx, &mut shapes);
 
-    vector_data.normalize();
-    for v in vector_data.points_mut() {
+    normalize(&mut shapes);
+    for v in shapes.iter_mut().flat_map(|p| p.as_mut_slice()) {
         v[1] = 600.0 - v[1];
     }
 
-    pdf::build_pdf(1, 800, 600, &vector_data, &color_map).save("out.pdf")?;
+    pdf::build_pdf(1, 800, 600, &shapes, &color_map).save("out.pdf")?;
 
     Ok(())
 }
 
-#[derive(Default)]
-struct VectorData {
-    lines: Vec<[[f32; 2]; 2]>,
-    polygons: Vec<(Poly, ColorCode)>,
-}
+type Point = glam::Vec3;
 
 #[derive(Copy, Clone)]
 enum Poly {
-    Tri([[f32; 2]; 3]),
-    Quad([[f32; 2]; 4]),
+    Tri([Point; 3]),
+    Quad([Point; 4]),
 }
 
 impl Poly {
-    fn as_slice(&self) -> &[[f32; 2]] {
+    fn as_slice(&self) -> &[Point] {
         match self {
             Poly::Tri(s) => s,
             Poly::Quad(s) => s,
         }
     }
-    fn as_mut_slice(&mut self) -> &mut [[f32; 2]] {
+    fn as_mut_slice(&mut self) -> &mut [Point] {
         match self {
             Poly::Tri(s) => s,
             Poly::Quad(s) => s,
@@ -134,38 +130,48 @@ impl Poly {
     }
 }
 
-impl VectorData {
-    fn points(&self) -> impl Iterator<Item = [f32; 2]> + '_ {
-        let polygon_points = self.polygons.iter().flat_map(|(p, _c)| p.as_slice());
-        let line_points = self.lines.iter().flatten();
-        polygon_points.chain(line_points).copied()
+#[derive(Copy, Clone)]
+enum Primitive {
+    Line([Point; 2]),
+    Polygon(Poly, ColorCode),
+}
+
+impl Primitive {
+    fn as_slice(&self) -> &[Point] {
+        match self {
+            Self::Line(l) => l,
+            Self::Polygon(p, _) => p.as_slice(),
+        }
     }
 
-    fn points_mut(&mut self) -> impl Iterator<Item = &mut [f32; 2]> {
-        let polygon_points = self
-            .polygons
-            .iter_mut()
-            .flat_map(|(p, _c)| p.as_mut_slice());
-        let line_points = self.lines.iter_mut().flatten();
-        polygon_points.chain(line_points)
+    fn as_mut_slice(&mut self) -> &mut [Point] {
+        match self {
+            Self::Line(l) => l,
+            Self::Polygon(p, _) => p.as_mut_slice(),
+        }
     }
 
-    fn normalize(&mut self) {
-        let [mut dx, mut dy] = [0.0_f32; 2];
+    fn center(&self) -> Point {
+        self.as_slice().iter().copied().sum::<Point>() / self.as_slice().len() as f32
+    }
+}
 
-        for [x, y] in self.points() {
-            if x < 0.0 {
-                dx = dx.max(-x);
-            }
-            if y < 0.0 {
-                dy = dy.max(-y);
-            }
-        }
+fn normalize(shapes: &mut [Primitive]) {
+    let [mut dx, mut dy] = [0.0_f32; 2];
 
-        for [x, y] in self.points_mut() {
-            *x += dx;
-            *y += dy;
+    for point in shapes.iter().flat_map(Primitive::as_slice) {
+        let (x, y) = (point.x, point.y);
+        if x < 0.0 {
+            dx = dx.max(-x);
         }
+        if y < 0.0 {
+            dy = dy.max(-y);
+        }
+    }
+
+    for point in shapes.iter_mut().flat_map(Primitive::as_mut_slice) {
+        point.x += dx;
+        point.y += dy;
     }
 }
 
