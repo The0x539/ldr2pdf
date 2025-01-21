@@ -91,8 +91,8 @@ pub enum SlotContent {
 pub struct Step {
     #[serde(rename = "@SerializedIndex")]
     pub serialized_index: u32,
-    #[serde(rename = "@RectOffset", with = "Arr4Space")]
-    pub rect_offset: [f32; 4],
+    #[serde(rename = "@RectOffset")]
+    pub rect_offset: Rect,
     #[serde(rename = "@IsVisibleStepNumber")]
     #[serde(with = "UpperBoolOpt", default)]
     pub visible_step_number: Option<bool>,
@@ -172,8 +172,8 @@ pub struct StepNumber {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct PartList {
-    #[serde(rename = "@Rect", with = "Arr4Space")]
-    pub rect: [f32; 4],
+    #[serde(rename = "@Rect")]
+    pub rect: Rect,
     #[serde(rename = "@Depth")]
     pub depth: i32,
 
@@ -230,8 +230,8 @@ pub struct DepthRectLower {
     #[serde(rename = "@depth")]
     #[serde_as(as = "DisplayFromStr")]
     pub depth: i32,
-    #[serde(rename = "@rect", with = "Arr4Space")]
-    pub rect: [f32; 4],
+    #[serde(rename = "@rect")]
+    pub rect: Rect,
 }
 
 #[serde_as]
@@ -240,8 +240,8 @@ pub struct DepthRectUpper {
     #[serde(rename = "@Depth")]
     #[serde_as(as = "DisplayFromStr")]
     pub depth: i32,
-    #[serde(rename = "@Rect", with = "Arr4Space")]
-    pub rect: [f32; 4],
+    #[serde(rename = "@Rect")]
+    pub rect: Rect,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -307,8 +307,8 @@ pub struct CalloutStepItemData {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct CalloutArrowItemData {
-    #[serde(rename = "@ArrowPosition", with = "Arr4Space")]
-    pub arrow_position: [f32; 4],
+    #[serde(rename = "@ArrowPosition")]
+    pub arrow_position: Rect,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -354,8 +354,8 @@ pub struct BufferExchangeDisplacement {
 pub struct ArrowItemData {
     #[serde(rename = "@Depth")]
     pub depth: i32,
-    #[serde(rename = "@Rect", with = "Arr4Space")]
-    pub rect: [f32; 4],
+    #[serde(rename = "@Rect")]
+    pub rect: Rect,
     #[serde(rename = "@Rotation")]
     pub rotation: f32,
     #[serde(rename = "@StartStyle")]
@@ -427,8 +427,8 @@ pub struct Bom {
     pub depth: i32,
     #[serde(rename = "@useCostomizeContentRect", with = "UpperBool")]
     pub customize_content_rect: bool,
-    #[serde(rename = "@rect", with = "Arr4Space")]
-    pub rect: [f32; 4],
+    #[serde(rename = "@rect")]
+    pub rect: Rect,
     #[serde(rename = "@IsShownAsRow", with = "UpperBool")]
     pub shown_as_row: bool,
     #[serde(rename = "@OrderBy")]
@@ -497,8 +497,8 @@ pub enum BomIdStyle {
 pub struct SizeGuide {
     #[serde(rename = "@depth")]
     pub depth: i32,
-    #[serde(rename = "@rect", with = "Arr4Space")]
-    pub rect: [f32; 4],
+    #[serde(rename = "@rect")]
+    pub rect: Rect,
     #[serde(rename = "@Parts", with = "SizeGuidePartList")]
     pub parts: Vec<SizeGuidePart>,
     #[serde(rename = "@IsUseGlobalStyle", with = "UpperBool")]

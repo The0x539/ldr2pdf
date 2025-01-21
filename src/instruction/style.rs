@@ -204,8 +204,9 @@ pub enum FontStyle {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Padding {
-    #[serde(rename = "@LRBT", with = "Arr4Space")]
-    pub lrbt: [f32; 4],
+    // TODO: figure out if the order is correct and consistent
+    #[serde(rename = "@LRBT")]
+    pub lrbt: Rect,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]

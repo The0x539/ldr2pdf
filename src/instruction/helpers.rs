@@ -78,6 +78,47 @@ impl<'de> Deserialize<'de> for Color {
     }
 }
 
+#[derive(Copy, Clone, Debug, Default)]
+pub struct Rect {
+    pub left: f32,
+    pub top: f32,
+    pub right: f32,
+    pub bottom: f32,
+}
+
+impl Serialize for Rect {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let ltrb = [self.left, self.top, self.right, self.bottom];
+        serializer.serialize_str(&spaces(&ltrb))
+    }
+}
+
+impl<'de> Deserialize<'de> for Rect {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct MyVisitor;
+        impl<'de> Visitor<'de> for MyVisitor {
+            type Value = Rect;
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("A Rect value, formatted as an l t r b string with four floats")
+            }
+            fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
+                let err = || E::invalid_value(Unexpected::Str(v), &self);
+                let ltrb = separated(v, " ").map_err(|_| err())?;
+                let [Ok(left), Ok(top), Ok(right), Ok(bottom)] = ltrb.map(f32::from_str) else {
+                    return Err(err());
+                };
+                Ok(Rect {
+                    left,
+                    top,
+                    right,
+                    bottom,
+                })
+            }
+        }
+        deserializer.deserialize_str(MyVisitor)
+    }
+}
+
 fn shorter(a: String, b: String) -> String {
     if a.len() <= b.len() {
         a
@@ -101,16 +142,6 @@ fn spaces(values: &[f32]) -> String {
     buf.pop();
     buf
 }
-
-serde_with::serde_conv!(
-    pub(crate) Arr4Space,
-    [f32; 4],
-    spaces,
-    |v: &str| -> Result<[f32; 4], XmlError> {
-        let [x, y, z, w] = separated(v, " ").expect("TODO: better error").map(xml_float);
-        Ok([x?, y?, z?, w?])
-    }
-);
 
 serde_with::serde_conv!(
     pub(crate) Vec2Space,

@@ -1,4 +1,5 @@
 use glam::Vec2;
+use helpers::Rect;
 use serde::{Deserialize, Serialize};
 
 pub mod page;
@@ -39,8 +40,7 @@ pub struct PageSetup {
     pub custom_size: Option<Vec2>,
     #[serde(rename = "IsPortrait", with = "helpers::UpperBool")]
     pub portrait: bool,
-    #[serde(with = "helpers::Arr4Space")]
-    pub margins: [f32; 4],
+    pub margins: Rect,
     #[serde(rename = "UseCMYKColorTable", with = "helpers::UpperBool")]
     pub use_cmyk_color_table: bool,
 }
