@@ -8,17 +8,26 @@ use std::str::FromStr;
 
 use super::page::ResizeBar;
 
-fn separated<'a, const N: usize>(string: &'a str, sep: &str) -> Option<[&'a str; N]> {
+#[derive(Debug)]
+enum SeparatedError {
+    NotEnough,
+    TooMany,
+}
+
+fn separated<'a, const N: usize>(
+    string: &'a str,
+    sep: &str,
+) -> Result<[&'a str; N], SeparatedError> {
     let mut iter = string.split(sep);
     let mut array = [""; N];
 
     for i in 0..N {
-        array[i] = iter.next()?;
+        array[i] = iter.next().ok_or(SeparatedError::NotEnough)?;
     }
     if iter.next().is_some() {
-        return None;
+        return Err(SeparatedError::TooMany);
     }
-    Some(array)
+    Ok(array)
 }
 
 fn de_float<E: Error>(s: &str) -> Result<f32, E> {
@@ -52,7 +61,7 @@ impl<'de> Deserialize<'de> for Color {
             }
             fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
                 let err = || E::invalid_value(Unexpected::Str(v), &self);
-                let rgba = separated(v, ":").ok_or_else(err)?;
+                let rgba = separated(v, ":").map_err(|_| err())?;
                 let [Ok(r), Ok(g), Ok(b), Ok(a)] = rgba.map(f32::from_str) else {
                     return Err(err());
                 };
@@ -134,6 +143,24 @@ serde_with::serde_conv!(
     |v: &str| -> Result<Option<Vec3>, XmlError> {
         let [x, y, z] = separated(v, " ").expect("TODO: better error").map(de_float::<XmlError>);
         Ok(Some(Vec3::new(x?, y?, z?)))
+    }
+);
+
+serde_with::serde_conv!(
+    pub(crate) PointList,
+    Vec<Vec2>,
+    |v: &[Vec2]| spaces(&v.iter().flat_map(|xy| [xy.x, xy.y]).collect::<Vec<_>>()),
+    |v: &str| -> Result<Vec<Vec2>, XmlError> {
+        let mut iter = v.split_whitespace().map(de_float::<XmlError>);
+        let mut points = vec![];
+        while let Some(x) = iter.next().transpose()? {
+            let Some(y) = iter.next().transpose()? else {
+                let msg = format!("point list contained an odd number of coordinates: {v}");
+                return Err(XmlError::Custom(msg));
+            };
+            points.push(Vec2 { x, y });
+        }
+        Ok(points)
     }
 );
 

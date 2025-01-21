@@ -1,6 +1,6 @@
 use super::helpers::*;
 use super::style::{
-    ArrowStyle, BoxStyle, CalloutDividerStyle, CalloutMultiplierStyle, Font, Padding,
+    ArrowStyle, Arrowhead, BoxStyle, CalloutDividerStyle, CalloutMultiplierStyle, Font, Padding,
     PageStyleInner, Spacing, StepItemLayout, TextboxFont,
 };
 use glam::{Vec2, Vec3};
@@ -78,6 +78,7 @@ pub enum SlotContent {
     Bom(Bom),
     Image(Image),
     Text(Text),
+    Arrow(ArrowItemData),
     #[default]
     #[serde(other)]
     Other,
@@ -106,6 +107,7 @@ pub struct Step {
     pub part_list: PartList,
     pub submodel_preview: Option<SubmodelPreview>,
     pub call_out: Option<Callout>,
+    pub buffer_exchange: Option<BufferExchange>,
 }
 
 #[skip_serializing_none]
@@ -280,6 +282,65 @@ pub struct CalloutStepItemData {
 pub struct CalloutArrowItemData {
     #[serde(rename = "@ArrowPosition", with = "Arr4Space")]
     pub arrow_position: [f32; 4],
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct BufferExchange {
+    #[serde(rename = "BufferExchangeItemData")]
+    pub items: Vec<BufferExchangeItemData>,
+}
+
+// SUPER JANK: as far as I can tell these fields aren't truly optional, but sometimes you get a <BufferExchangeItemData />.
+// I'd like to find a nicer way to represent this, but Serde's not being very cooperative.
+#[skip_serializing_none]
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct BufferExchangeItemData {
+    #[serde(rename = "@targetPartUID")]
+    pub target_part_uid: Option<u32>,
+    #[serde(rename = "@targetPartName")]
+    pub target_part_name: Option<String>,
+    #[serde(rename = "@targetPartColorCode")]
+    pub target_part_color_code: Option<u32>,
+    #[serde(rename = "@targetPartPosition", default, with = "Vec3SpaceOpt")]
+    pub target_part_position: Option<Vec3>,
+    #[serde(rename = "@targetPartDirection", default, with = "Vec3SpaceOpt")]
+    pub target_part_direction: Option<Vec3>,
+    #[serde(rename = "@showArrow", default, with = "UpperBoolOpt")]
+    pub show_arrow: Option<bool>,
+    #[serde(rename = "@PrevScreenSpacePartStart", default, with = "Vec2SpaceOpt")]
+    pub prev_screen_space_part_start: Option<Vec2>,
+    #[serde(rename = "@PrevScreenSpacePartEnd", default, with = "Vec2SpaceOpt")]
+    pub prev_screen_space_part_end: Option<Vec2>,
+
+    pub displacement: Option<BufferExchangeDisplacement>,
+    pub arrow: Option<ArrowItemData>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct BufferExchangeDisplacement {
+    #[serde(rename = "@displacement", with = "Vec3Space")]
+    pub displacement: Vec3,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct ArrowItemData {
+    #[serde(rename = "@Depth")]
+    pub depth: i32,
+    #[serde(rename = "@Rect", with = "Arr4Space")]
+    pub rect: [f32; 4],
+    #[serde(rename = "@Rotation")]
+    pub rotation: f32,
+    #[serde(rename = "@StartStyle")]
+    pub start_style: Arrowhead,
+    #[serde(rename = "@EndStyle")]
+    pub end_style: Arrowhead,
+    #[serde(rename = "@Thickness")]
+    pub thickness: u32,
+    #[serde(rename = "@Color", with = "Vec3Space")]
+    pub color: Vec3,
+    #[serde(rename = "@PointList", with = "PointList")]
+    pub point_list: Vec<Vec2>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
