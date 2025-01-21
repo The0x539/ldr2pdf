@@ -15,7 +15,14 @@ type Result<T, E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 fn main() -> Result<()> {
     let args = std::env::args().collect::<HashSet<_>>();
     if args.contains("xml") {
-        xml_main()?;
+        std::env::set_current_dir("/home/the0x539/winhome/documents/lego/")?;
+        for path in [
+            "./penbu/penbu.io",
+            "./penbu/other chuuba/soymilk/soymilk.io",
+            "./aria/Alicia's Gondola.io",
+        ] {
+            xml_main(path)?;
+        }
     }
     if args.contains("pdf") {
         render_main()?;
@@ -35,9 +42,7 @@ fn read_model_ins(path: impl AsRef<std::path::Path>) -> Result<String, zip::resu
     Ok(buf)
 }
 
-fn xml_main() -> Result<()> {
-    // let path = "/home/the0x539/winhome/documents/lego/penbu/penbu.io";
-    let path = "/home/the0x539/winhome/documents/lego/penbu/other chuuba/soymilk/soymilk.io";
+fn xml_main(path: &str) -> Result<()> {
     let xml = read_model_ins(path)?;
 
     let xml = tidier::format(xml, true, &Default::default())?;
@@ -54,7 +59,7 @@ fn xml_main() -> Result<()> {
             .unwrap_or(0)
             .saturating_sub(10);
 
-        println!("line {line_index}");
+        println!("round trip failed for {path} at line {line_index}");
         let byte_index = xml.lines().take(line_index).map(|l| l.len() + 1).sum();
 
         pretty_assertions::assert_str_eq!(&xml[byte_index..], &roundtrip[byte_index..]);

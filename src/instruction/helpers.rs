@@ -119,7 +119,7 @@ serde_with::serde_conv!(
 serde_with::serde_conv!(
     pub(crate) Vec2SpaceOpt,
     Option<Vec2>,
-    |v: &Option<Vec2>| spaces(&v.unwrap().to_array()),
+    |v: &Option<Vec2>| spaces(&v.expect("missing #[skip_serializing_none]").to_array()),
     |v: &str| -> Result<Option<Vec2>, XmlError> {
         let [x, y] = separated(v, " ").expect("TODO: better error").map(de_float::<XmlError>);
         Ok(Some(Vec2::new(x?, y?)))
@@ -139,7 +139,7 @@ serde_with::serde_conv!(
 serde_with::serde_conv!(
     pub(crate) Vec3SpaceOpt,
     Option<Vec3>,
-    |v: &Option<Vec3>| spaces(&v.unwrap().to_array()),
+    |v: &Option<Vec3>| spaces(&v.expect("missing #[skip_serializing_none]").to_array()),
     |v: &str| -> Result<Option<Vec3>, XmlError> {
         let [x, y, z] = separated(v, " ").expect("TODO: better error").map(de_float::<XmlError>);
         Ok(Some(Vec3::new(x?, y?, z?)))

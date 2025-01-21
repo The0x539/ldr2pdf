@@ -6,6 +6,7 @@ pub mod style;
 
 mod helpers;
 pub use helpers::Color;
+use serde_with::skip_serializing_none;
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -28,13 +29,14 @@ pub struct Pages {
     pub inner: Vec<page::Page>,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct PageSetup {
     pub paper_type: PaperType,
     pub length_unit: LengthUnit,
-    #[serde(with = "helpers::Vec2Space")]
-    pub custom_size: Vec2,
+    #[serde(with = "helpers::Vec2SpaceOpt", default)]
+    pub custom_size: Option<Vec2>,
     #[serde(rename = "IsPortrait", with = "helpers::UpperBool")]
     pub portrait: bool,
     #[serde(with = "helpers::Arr4Space")]

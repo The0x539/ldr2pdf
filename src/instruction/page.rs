@@ -1,7 +1,7 @@
 use super::helpers::*;
 use super::style::{
     ArrowStyle, Arrowhead, BoxStyle, CalloutDividerStyle, CalloutMultiplierStyle, Font, Padding,
-    PageStyleInner, Spacing, StepItemLayout, TextboxFont,
+    PageStyleInner, Scale, Spacing, StepItemLayout, TextboxFont,
 };
 use glam::{Vec2, Vec3};
 use serde::{Deserialize, Serialize};
@@ -170,6 +170,27 @@ pub struct PartList {
     pub rect: [f32; 4],
     #[serde(rename = "@Depth")]
     pub depth: i32,
+
+    #[serde(flatten)]
+    pub properties: Option<PartListProperties>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct PartListProperties {
+    pub colors: BoxStyle,
+    pub part_size: Scale,
+    pub part_count: Font,
+    pub padding: Padding,
+    pub spacing: Spacing,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct PartListColors {
+    #[serde(rename = "@IsUseBgColor", with = "UpperBool")]
+    pub use_bg_color: bool,
+    #[serde(rename = "@IsUseBorder", with = "UpperBool")]
+    pub use_border: bool,
 }
 
 #[skip_serializing_none]

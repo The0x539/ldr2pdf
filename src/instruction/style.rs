@@ -216,33 +216,48 @@ pub struct PartsListStyle {
     pub spacing: Spacing,
 }
 
+#[skip_serializing_none]
+#[serde_as]
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct BoxStyle {
     #[serde(rename = "@IsUseBgColor", with = "UpperBool")]
     pub use_bg_color: bool,
-    #[serde(rename = "@BgColor")]
-    pub bg_color: Color,
+    #[serde(rename = "@BgColor", default)]
+    pub bg_color: Option<Color>,
     #[serde(rename = "@IsUseBorder", with = "UpperBool")]
     pub use_border: bool,
-    #[serde(rename = "@BorderColor")]
-    pub border_color: Color,
-    #[serde(rename = "@BorderThickness")]
-    pub border_thickness: u32,
-    #[serde(rename = "@BorderRadius")]
-    pub border_radius: u32,
+    #[serde(rename = "@BorderColor", default)]
+    pub border_color: Option<Color>,
+    #[serde(
+        rename = "@BorderThickness",
+        default,
+        deserialize_with = "option_from_str"
+    )]
+    pub border_thickness: Option<u32>,
+    #[serde(
+        rename = "@BorderRadius",
+        default,
+        deserialize_with = "option_from_str"
+    )]
+    pub border_radius: Option<u32>,
 }
 
+#[serde_as]
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Scale {
     #[serde(rename = "@Scale")]
+    #[serde_as(as = "DisplayFromStr")]
     pub scale: f32,
 }
 
+#[serde_as]
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Spacing {
     #[serde(rename = "@Horizontal")]
+    #[serde_as(as = "DisplayFromStr")]
     pub horizontal: f32,
     #[serde(rename = "@Vertical")]
+    #[serde_as(as = "DisplayFromStr")]
     pub vertical: f32,
 }
 
