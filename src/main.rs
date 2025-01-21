@@ -20,6 +20,7 @@ fn main() -> Result<()> {
             "./penbu/penbu.io",
             "./penbu/other chuuba/soymilk/soymilk.io",
             "./aria/Alicia's Gondola.io",
+            "./mario/Star World.io",
         ] {
             xml_main(path)?;
         }

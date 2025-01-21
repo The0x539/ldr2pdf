@@ -369,7 +369,7 @@ pub struct Text {
     #[serde(flatten)]
     pub bounds: DepthRectUpper,
     #[serde(rename = "@Rotation")]
-    pub rotation: i32,
+    pub rotation: f32,
     #[serde(rename = "@TextValue")]
     pub text_value: String,
     #[serde(flatten)]
@@ -421,7 +421,7 @@ pub struct Bom {
     pub depth: i32,
     #[serde(rename = "@useCostomizeContentRect", with = "UpperBool")]
     pub customize_content_rect: bool,
-    #[serde(rename = "@rect")]
+    #[serde(rename = "@rect", with = "Arr4Space")]
     pub rect: [f32; 4],
     #[serde(rename = "@IsShownAsRow", with = "UpperBool")]
     pub shown_as_row: bool,
