@@ -16,12 +16,16 @@ fn main() -> Result<()> {
     let args = std::env::args().collect::<HashSet<_>>();
     if args.contains("xml") {
         std::env::set_current_dir("/home/the0x539/winhome/documents/lego/")?;
-        for path in [
-            "./penbu/penbu.io",
-            "./penbu/other chuuba/soymilk/soymilk.io",
-            "./aria/Alicia's Gondola.io",
-            "./mario/Star World.io",
-        ] {
+
+        let paths = walkdir::WalkDir::new(".")
+            .into_iter()
+            .map(Result::unwrap)
+            .filter(|e| e.file_type().is_file())
+            .filter(|e| e.path().extension() == Some("io".as_ref()))
+            .map(|e| e.into_path())
+            .collect::<Vec<_>>();
+
+        for path in paths {
             xml_main(path)?;
         }
     }
@@ -37,18 +41,26 @@ fn main() -> Result<()> {
 fn read_model_ins(path: impl AsRef<std::path::Path>) -> Result<String, zip::result::ZipError> {
     let f = File::open(path)?;
     let mut zip = ZipArchive::new(f)?;
-    let mut ins = zip.by_name("model.ins")?;
+    let mut ins = zip.by_name_decrypt("model.ins", b"soho0909")?;
     let mut buf = String::new();
     ins.read_to_string(&mut buf)?;
     Ok(buf)
 }
 
-fn xml_main(path: &str) -> Result<()> {
-    let xml = read_model_ins(path)?;
+fn xml_main(path: impl AsRef<std::path::Path>) -> Result<()> {
+    let path = path.as_ref();
+    let xml = match read_model_ins(path) {
+        Err(zip::result::ZipError::FileNotFound) => {
+            return Ok(());
+        }
+        x => x.inspect_err(|e| println!("failed to open zip at {}: {e}", path.display()))?,
+    };
+    let path = path.display();
 
     let xml = tidier::format(xml, true, &Default::default())?;
 
-    let page_design: instruction::Instruction = quick_xml::de::from_str(&xml)?;
+    let page_design: instruction::Instruction =
+        quick_xml::de::from_str(&xml).inspect_err(|_| println!("failed to deserialize {path}"))?;
     let roundtrip = quick_xml::se::to_string(&page_design)?;
     let roundtrip = tidier::format(roundtrip, true, &Default::default())?;
 

@@ -7,6 +7,7 @@ use serde_with::{serde_as, skip_serializing_none, DisplayFromStr};
 use super::helpers::*;
 use super::LengthUnit;
 
+#[skip_serializing_none]
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Style {
@@ -17,7 +18,7 @@ pub struct Style {
     #[serde(rename = "@PaddingUnit")]
     pub padding_unit: LengthUnit,
     pub page: PageStyle,
-    pub step_item_layout: StepItemLayoutOuter,
+    pub step_item_layout: Option<StepItemLayoutOuter>,
     pub step_number: StepNumberStyle,
     pub parts_list: PartsListStyle,
     pub new_part_highlight: NewPartHighlightStyle,
@@ -75,10 +76,13 @@ pub struct PageStyleInner {
     #[serde(rename = "@IsUseLineSeparatorRows", with = "UpperBool")]
     pub use_line_separator_rows: bool,
     #[serde(rename = "@LineSeperatorColor")]
-    pub line_separator_color: Color,
-    #[serde(rename = "@LineSeperatorThickness")]
-    #[serde_as(as = "DisplayFromStr")]
-    pub line_separator_thickness: u32,
+    pub line_separator_color: Option<Color>,
+    #[serde(
+        rename = "@LineSeperatorThickness",
+        default,
+        deserialize_with = "option_from_str"
+    )]
+    pub line_separator_thickness: Option<u32>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -277,14 +281,15 @@ pub struct Highlight {
     pub color: Color,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct SubModelPreviewStyle {
     #[serde(rename = "@IsVisible", with = "UpperBool")]
     pub visible: bool,
-    pub colors: BoxStyle,
-    pub multiplier: MultiplierStyle,
-    pub padding: Padding,
+    pub colors: Option<BoxStyle>,
+    pub multiplier: Option<MultiplierStyle>,
+    pub padding: Option<Padding>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -303,6 +308,7 @@ pub struct CalloutMultiplierStyle {
     pub font: Font,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct SizeGuideStyle {
@@ -310,7 +316,7 @@ pub struct SizeGuideStyle {
     pub font: Font,
     pub padding: Padding,
     pub assembly_margin: Spacing,
-    pub length_indicator: LengthIndicatorStyle,
+    pub length_indicator: Option<LengthIndicatorStyle>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]

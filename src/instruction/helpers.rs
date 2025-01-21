@@ -6,6 +6,8 @@ use serde_with::{DeserializeAs, DisplayFromStr};
 use std::fmt::{Display, Write};
 use std::str::FromStr;
 
+use crate::instruction::page::SizeGuidePart;
+
 use super::page::ResizeBar;
 
 #[derive(Debug)]
@@ -30,9 +32,13 @@ fn separated<'a, const N: usize>(
     Ok(array)
 }
 
-fn de_float<E: Error>(s: &str) -> Result<f32, E> {
+fn de_parse<T: FromStr, E: Error>(s: &str) -> Result<T, E> {
     s.parse()
         .map_err(|_| E::invalid_value(Unexpected::Str(s), &"a float"))
+}
+
+fn xml_float(s: &str) -> Result<f32, XmlError> {
+    de_parse(s)
 }
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -101,7 +107,7 @@ serde_with::serde_conv!(
     [f32; 4],
     spaces,
     |v: &str| -> Result<[f32; 4], XmlError> {
-        let [x, y, z, w] = separated(v, " ").expect("TODO: better error").map(de_float::<XmlError>);
+        let [x, y, z, w] = separated(v, " ").expect("TODO: better error").map(xml_float);
         Ok([x?, y?, z?, w?])
     }
 );
@@ -111,7 +117,7 @@ serde_with::serde_conv!(
     Vec2,
     |v: &Vec2| spaces(&v.to_array()),
     |v: &str| -> Result<Vec2, XmlError> {
-        let [x, y] = separated(v, " ").expect("TODO: better error").map(de_float::<XmlError>);
+        let [x, y] = separated(v, " ").expect("TODO: better error").map(xml_float);
         Ok(Vec2::new(x?, y?))
     }
 );
@@ -121,7 +127,7 @@ serde_with::serde_conv!(
     Option<Vec2>,
     |v: &Option<Vec2>| spaces(&v.expect("missing #[skip_serializing_none]").to_array()),
     |v: &str| -> Result<Option<Vec2>, XmlError> {
-        let [x, y] = separated(v, " ").expect("TODO: better error").map(de_float::<XmlError>);
+        let [x, y] = separated(v, " ").expect("TODO: better error").map(xml_float);
         Ok(Some(Vec2::new(x?, y?)))
     }
 );
@@ -131,7 +137,7 @@ serde_with::serde_conv!(
     Vec3,
     |v: &Vec3| spaces(&v.to_array()),
     |v: &str| -> Result<Vec3, XmlError> {
-        let [x, y, z] = separated(v, " ").expect("TODO: better error").map(de_float::<XmlError>);
+        let [x, y, z] = separated(v, " ").expect("TODO: better error").map(xml_float);
         Ok(Vec3::new(x?, y?, z?))
     }
 );
@@ -141,7 +147,7 @@ serde_with::serde_conv!(
     Option<Vec3>,
     |v: &Option<Vec3>| spaces(&v.expect("missing #[skip_serializing_none]").to_array()),
     |v: &str| -> Result<Option<Vec3>, XmlError> {
-        let [x, y, z] = separated(v, " ").expect("TODO: better error").map(de_float::<XmlError>);
+        let [x, y, z] = separated(v, " ").expect("TODO: better error").map(xml_float);
         Ok(Some(Vec3::new(x?, y?, z?)))
     }
 );
@@ -151,16 +157,32 @@ serde_with::serde_conv!(
     Vec<Vec2>,
     |v: &[Vec2]| spaces(&v.iter().flat_map(|xy| [xy.x, xy.y]).collect::<Vec<_>>()),
     |v: &str| -> Result<Vec<Vec2>, XmlError> {
-        let mut iter = v.split_whitespace().map(de_float::<XmlError>);
+        let mut iter = v.split_whitespace().map(xml_float);
         let mut points = vec![];
         while let Some(x) = iter.next().transpose()? {
-            let Some(y) = iter.next().transpose()? else {
-                let msg = format!("point list contained an odd number of coordinates: {v}");
-                return Err(XmlError::Custom(msg));
-            };
+            let y = iter.next().transpose()?.ok_or(XmlError::missing_field("y"))?;
             points.push(Vec2 { x, y });
         }
         Ok(points)
+    }
+);
+
+serde_with::serde_conv!(
+    pub(crate) SizeGuidePartList,
+    Vec<SizeGuidePart>,
+    |v: &[SizeGuidePart]| v.iter().map(|p| format!("{}\t{}\t{}\t{}\n", p.id, p.color, p.size.x, p.size.y)).collect::<String>(),
+    |v: &str| -> Result<Vec<SizeGuidePart>, XmlError> {
+        let mut iter = v.split_whitespace();
+        let mut parts = vec![];
+        while let Some(id) = iter.next() {
+            let color = iter.next().ok_or(XmlError::missing_field("color")).and_then(de_parse)?;
+            let x = iter.next().ok_or(XmlError::missing_field("x")).and_then(xml_float)?;
+            let y = iter.next().ok_or(XmlError::missing_field("y")).and_then(xml_float)?;
+            let id = id.to_owned();
+            let size = Vec2 { x, y };
+            parts.push(SizeGuidePart { id, color , size });
+        }
+        Ok(parts)
     }
 );
 

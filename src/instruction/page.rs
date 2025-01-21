@@ -1,7 +1,7 @@
 use super::helpers::*;
 use super::style::{
     ArrowStyle, Arrowhead, BoxStyle, CalloutDividerStyle, CalloutMultiplierStyle, Font, Padding,
-    PageStyleInner, Scale, Spacing, StepItemLayout, TextboxFont,
+    PageStyleInner, Scale, Spacing, StepItemLayout, StepNumberFont, TextboxFont,
 };
 use glam::{Vec2, Vec3};
 use serde::{Deserialize, Serialize};
@@ -79,6 +79,7 @@ pub enum SlotContent {
     Image(Image),
     Text(Text),
     Arrow(ArrowItemData),
+    SizeGuide(SizeGuide),
     #[default]
     #[serde(other)]
     Other,
@@ -158,10 +159,15 @@ pub struct DefaultCameraControl {
     pub model_angle: Option<Vec3>,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct StepNumber {
     #[serde(rename = "@Depth")]
     pub depth: i32,
+    #[serde(rename = "StepNumber")]
+    pub font: Option<StepNumberFont>,
+    #[serde(rename = "Padding")]
+    pub padding: Option<Padding>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -485,4 +491,23 @@ pub enum BomIdStyle {
     ItemNoColorName,
     ElementID,
     DoNotShow,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct SizeGuide {
+    #[serde(rename = "@depth")]
+    pub depth: i32,
+    #[serde(rename = "@rect", with = "Arr4Space")]
+    pub rect: [f32; 4],
+    #[serde(rename = "@Parts", with = "SizeGuidePartList")]
+    pub parts: Vec<SizeGuidePart>,
+    #[serde(rename = "@IsUseGlobalStyle", with = "UpperBool")]
+    pub use_global_style: bool,
+}
+
+#[derive(Debug, Default)]
+pub struct SizeGuidePart {
+    pub id: String,
+    pub color: u32,
+    pub size: Vec2,
 }
