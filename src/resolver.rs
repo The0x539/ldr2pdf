@@ -48,13 +48,13 @@ impl FileRefResolver for Resolver {
         }
 
         for dir in [
-            "/mnt/c/Users/Andrew/AppData/Local/Stud.io/CustomParts/parts",
-            "/mnt/c/Program Files/Studio 2.0/ldraw/p/4",
-            "/mnt/c/Program Files/Studio 2.0/ldraw/p/8",
-            "/mnt/c/Program Files/Studio 2.0/ldraw/p/48",
-            "/mnt/c/Program Files/Studio 2.0/ldraw/p",
-            "/mnt/c/Program Files/Studio 2.0/ldraw/parts",
-            "/mnt/c/Program Files/Studio 2.0/ldraw/UnOfficial/parts",
+            "c:/Users/Andrew/AppData/Local/Stud.io/CustomParts/parts",
+            "c:/Program Files/Studio 2.0/ldraw/p/48",
+            "c:/Program Files/Studio 2.0/ldraw/p",
+            "c:/Program Files/Studio 2.0/ldraw/p/8",
+            "c:/Program Files/Studio 2.0/ldraw/p/4",
+            "c:/Program Files/Studio 2.0/ldraw/parts",
+            "c:/Program Files/Studio 2.0/ldraw/UnOfficial/parts",
         ] {
             let path = Path::new(dir).join(&filename);
             if path.exists() {

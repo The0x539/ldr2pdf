@@ -18,7 +18,7 @@ pub fn traverse(
         match cmd {
             Command::Comment(..) => {}
             Command::SubFileRef(sfrc) => {
-                traverse(source_map, &sfrc.file, ctx.child(sfrc), output);
+                traverse(source_map, &sfrc.file, ctx.child(sfrc, false), output);
             }
             Command::Line(line) => {
                 output.push(Primitive::Line(ctx.project(line.vertices)));
@@ -42,9 +42,28 @@ pub type ColorCode = u32;
 // Special color code that "inherits" the existing color.
 const CURRENT_COLOR: ColorCode = 16;
 
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
+pub enum Winding {
+    #[default]
+    Ccw,
+    Cw,
+}
+
+impl std::ops::Not for Winding {
+    type Output = Self;
+    fn not(self) -> Self {
+        match self {
+            Self::Cw => Self::Ccw,
+            Self::Ccw => Self::Cw,
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct GeometryContext {
-    transform: Mat4,
-    color: ColorCode,
+    pub(crate) transform: Mat4,
+    pub(crate) color: ColorCode,
+    pub(crate) inverted: bool,
 }
 
 impl GeometryContext {
@@ -55,13 +74,15 @@ impl GeometryContext {
         Self {
             transform,
             color: CURRENT_COLOR,
+            inverted: false,
         }
     }
 
-    pub fn child(&self, subfile: &weldr::SubFileRefCmd) -> Self {
+    pub fn child(&self, subfile: &weldr::SubFileRefCmd, invert: bool) -> Self {
         Self {
             transform: self.transform * subfile.matrix(),
             color: new_color(self.color, subfile.color),
+            inverted: invert ^ self.inverted,
         }
     }
 
@@ -70,7 +91,7 @@ impl GeometryContext {
     }
 }
 
-fn new_color(current: ColorCode, new: ColorCode) -> ColorCode {
+pub fn new_color(current: ColorCode, new: ColorCode) -> ColorCode {
     if new == CURRENT_COLOR {
         current
     } else {

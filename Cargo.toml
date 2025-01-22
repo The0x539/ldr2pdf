@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+bevy = { version = "0.15.1", features = ["dynamic_linking"] }
+bevy_flycam = "0.15.0"
+dirs = "6.0.0"
 glam = "0.23.0"
 lopdf = "0.34.0"
 pretty_assertions = "1.4.1"
@@ -19,3 +22,9 @@ walkdir = "2.5.0"
 weldr = { git = "https://github.com/djeedai/weldr" }
 zip = "2.2.1"
 # ldr_tools = { path = "../../py/ldr_tools_blender/ldr_tools" }
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3

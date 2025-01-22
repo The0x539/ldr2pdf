@@ -1,3 +1,4 @@
+mod bevvy;
 pub mod instruction;
 mod ldr;
 mod pdf;
@@ -34,6 +35,9 @@ fn main() -> Result<()> {
     }
     if args.contains("fmt") {
         fmt_main()?;
+    }
+    if args.contains("bevy") {
+        bevvy::main();
     }
     Ok(())
 }
