@@ -39,18 +39,25 @@ pub fn main() {
         .run();
 }
 
-/// set up a simple 3D scene
+fn make_polyline(lines: impl IntoIterator<Item = [Vec3; 2]>) -> Polyline {
+    let null = Vec3::splat(f32::NAN);
+    Polyline {
+        vertices: lines.into_iter().flat_map(|[a, b]| [a, b, null]).collect(),
+    }
+}
+
 fn setup(
     mut commands: Commands,
+
     mut meshes: ResMut<Assets<Mesh>>,
-    mut polylines: ResMut<Assets<Polyline>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+
+    mut lines: ResMut<Assets<Polyline>>,
     mut line_materials: ResMut<Assets<PolylineMaterial>>,
 ) {
-    let resolver = Resolver::new(dirs::document_dir().unwrap().join("lego/penbu/ket.io")).unwrap();
+    let resolver = Resolver::new(dirs::document_dir().unwrap().join("lego/aria/HQ.io")).unwrap();
     let mut source_map = SourceMap::new();
-    let main_model_name = weldr::parse("ket.io", &resolver, &mut source_map).unwrap();
-    weldr::parse("3005.dat", &resolver, &mut source_map).unwrap();
+    let main_model_name = weldr::parse("HQ.io", &resolver, &mut source_map).unwrap();
 
     let color_map = ColorMap::load("C:/Program Files/Studio 2.0/ldraw/LDConfig.ldr").unwrap();
 
@@ -63,11 +70,19 @@ fn setup(
 
     let mut mesh_handles = HashMap::<String, Handle<Mesh>>::new();
     let mut polyline_handles = HashMap::<String, Handle<Polyline>>::new();
+    let mut opt_polyline_handles = HashMap::<String, Handle<Polyline>>::new();
     let mut mat_handles = HashMap::<ColorCode, Handle<StandardMaterial>>::new();
 
-    let polyline_material = line_materials.add(PolylineMaterial {
+    let line_material = line_materials.add(PolylineMaterial {
         width: 3.0,
-        color: Color::WHITE.into(),
+        color: Color::BLACK.into(),
+        ..default()
+    });
+
+    let opt_line_material = line_materials.add(PolylineMaterial {
+        width: 6.0,
+        color: Color::BLACK.into(),
+        depth_bias: 0.1,
         ..default()
     });
 
@@ -75,15 +90,8 @@ fn setup(
 
     for part in &parts {
         if !mesh_handles.contains_key(&part.id) {
-            let mut triangles = Default::default();
-            let mut lines = Default::default();
-            traverse_part(
-                &source_map,
-                &part.id,
-                ctx.clone(),
-                &mut triangles,
-                &mut lines,
-            );
+            let mut primitives = Default::default();
+            traverse_part(&source_map, &part.id, ctx.clone(), &mut primitives);
 
             let mesh = Mesh::new(
                 PrimitiveTopology::TriangleList,
@@ -91,30 +99,30 @@ fn setup(
             )
             .with_inserted_attribute(
                 Mesh::ATTRIBUTE_POSITION,
-                triangles
+                primitives
+                    .triangles
                     .iter()
                     .flatten()
-                    .map(glam::Vec3::to_array)
+                    .map(Vec3::to_array)
                     .collect::<Vec<_>>(),
             )
             .with_computed_normals();
 
             mesh_handles.insert(part.id.clone(), meshes.add(mesh));
 
-            let mut vertices = vec![];
-            for line in lines {
-                vertices.push(Vec3::from_array(line[0].to_array()));
-                vertices.push(Vec3::from_array(line[1].to_array()));
-                vertices.push(Vec3::splat(f32::NAN));
-            }
+            let polyline = make_polyline(primitives.lines);
+            polyline_handles.insert(part.id.clone(), lines.add(polyline));
 
-            polyline_handles.insert(part.id.clone(), polylines.add(Polyline { vertices }));
+            let opt_polyline = make_polyline(primitives.opt_lines.iter().map(|&(a, _b)| a));
+            opt_polyline_handles.insert(part.id.clone(), lines.add(opt_polyline));
         }
 
         if !mat_handles.contains_key(&part.color) {
-            let rgb = color_map.by_code(part.color).value;
-            let [r, g, b] = [rgb.red, rgb.green, rgb.blue].map(|n| n as f32 / 255.0);
-            let color = Color::srgb(r, g, b);
+            let ldraw_color = color_map.by_code(part.color);
+            let rgb = ldraw_color.value;
+            let alpha = ldraw_color.alpha.unwrap_or(0xFF);
+            let [r, g, b, a] = [rgb.red, rgb.green, rgb.blue, alpha].map(|n| n as f32 / 255.0);
+            let color = Color::srgba(r, g, b, a);
             mat_handles.insert(part.color, materials.add(color));
         }
 
@@ -126,7 +134,14 @@ fn setup(
 
         commands.spawn(PolylineBundle {
             polyline: PolylineHandle(polyline_handles[&part.id].clone()),
-            material: PolylineMaterialHandle(polyline_material.clone()),
+            material: PolylineMaterialHandle(line_material.clone()),
+            transform: Transform::from_matrix(part.transform),
+            ..default()
+        });
+
+        commands.spawn(PolylineBundle {
+            polyline: PolylineHandle(opt_polyline_handles[&part.id].clone()),
+            material: PolylineMaterialHandle(opt_line_material.clone()),
             transform: Transform::from_matrix(part.transform),
             ..default()
         });
@@ -197,12 +212,22 @@ fn traverse_design(
     }
 }
 
-pub fn traverse_part(
+fn bevy_from_glam(a: glam::Vec3) -> Vec3 {
+    Vec3::from_array(a.to_array())
+}
+
+#[derive(Default)]
+struct Primitives {
+    triangles: Vec<[Vec3; 3]>,
+    lines: Vec<[Vec3; 2]>,
+    opt_lines: Vec<([Vec3; 2], [Vec3; 2])>,
+}
+
+fn traverse_part(
     source_map: &SourceMap,
     model_name: &str,
     ctx: GeometryContext,
-    triangles: &mut Vec<[glam::Vec3; 3]>,
-    lines: &mut Vec<[glam::Vec3; 2]>,
+    output: &mut Primitives,
 ) {
     let Some(model) = source_map.get(model_name) else {
         panic!("{model_name}");
@@ -238,32 +263,40 @@ pub fn traverse_part(
             }
             Command::SubFileRef(sfrc) => {
                 let child = ctx.child(sfrc, invert_next);
-                traverse_part(source_map, &sfrc.file, child, triangles, lines);
+                traverse_part(source_map, &sfrc.file, child, output);
                 invert_next = false;
             }
-            Command::Line(l) => lines.push(ctx.project(l.vertices)),
+            Command::Line(l) => output
+                .lines
+                .push(ctx.project(l.vertices).map(bevy_from_glam)),
+
+            Command::OptLine(l) => {
+                let [vertices, control_points] =
+                    [l.vertices, l.control_points].map(|x| ctx.project(x).map(bevy_from_glam));
+                output.opt_lines.push((vertices, control_points));
+            }
             Command::Triangle(t) => {
                 assert!(!invert_next);
 
                 // TODO: color of individual polygons
-                let [a, b, c] = ctx.project(t.vertices);
-                if effective_winding == Winding::Ccw {
-                    triangles.push([a, b, c]);
+                let [a, b, c] = ctx.project(t.vertices).map(bevy_from_glam);
+                let to_push = if effective_winding == Winding::Ccw {
+                    [a, b, c]
                 } else {
-                    triangles.push([c, b, a]);
-                }
+                    [c, b, a]
+                };
+                output.triangles.push(to_push);
             }
             Command::Quad(q) => {
                 assert!(!invert_next);
 
-                let [a, b, c, d] = ctx.project(q.vertices);
-                if effective_winding == Winding::Ccw {
-                    triangles.push([a, b, c]);
-                    triangles.push([c, d, a]);
+                let [a, b, c, d] = ctx.project(q.vertices).map(bevy_from_glam);
+                let to_push = if effective_winding == Winding::Ccw {
+                    [[a, b, c], [c, d, a]]
                 } else {
-                    triangles.push([c, b, a]);
-                    triangles.push([a, d, c]);
-                }
+                    [[c, b, a], [a, d, c]]
+                };
+                output.triangles.extend(to_push);
             }
             _ => {}
         }

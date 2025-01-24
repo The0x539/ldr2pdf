@@ -55,6 +55,7 @@ impl FileRefResolver for Resolver {
             "c:/Program Files/Studio 2.0/ldraw/p/4",
             "c:/Program Files/Studio 2.0/ldraw/parts",
             "c:/Program Files/Studio 2.0/ldraw/UnOfficial/parts",
+            "c:/Program Files/Studio 2.0/ldraw/UnOfficial/p",
         ] {
             let path = Path::new(dir).join(&filename);
             if path.exists() {
