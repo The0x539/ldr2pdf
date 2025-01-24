@@ -2,16 +2,17 @@ use crate::{
     ldr::{new_color, ColorCode, ColorMap, GeometryContext, Winding},
     resolver::Resolver,
 };
+use bevy_flycam::NoCameraPlayerPlugin;
+use bevy_polyline::prelude::*;
 use weldr::{Command, Mat4, SourceMap};
 
 use bevy::{
     asset::RenderAssetUsages,
-    color::palettes::css::*,
-    pbr::wireframe::{WireframeConfig, WireframePlugin},
     prelude::*,
     render::{
+        camera::Exposure,
         mesh::PrimitiveTopology,
-        settings::{Backends, RenderCreation, WgpuFeatures, WgpuSettings},
+        settings::{Backends, RenderCreation, WgpuSettings},
         RenderPlugin,
     },
     utils::HashMap,
@@ -22,31 +23,18 @@ pub fn main() {
         .add_plugins((
             DefaultPlugins.set(RenderPlugin {
                 render_creation: RenderCreation::Automatic(WgpuSettings {
-                    // WARN this is a native only feature. It will not work with webgl or webgpu
-                    features: WgpuFeatures::POLYGON_MODE_LINE,
                     backends: Some(Backends::VULKAN),
                     ..default()
                 }),
                 ..default()
             }),
-            // You need to add this plugin to enable wireframe rendering
-            WireframePlugin,
+            PolylinePlugin,
+            NoCameraPlayerPlugin,
         ))
-        // Wireframes can be configured with this resource. This can be changed at runtime.
-        .insert_resource(WireframeConfig {
-            // The global wireframe config enables drawing of wireframes on every mesh,
-            // except those with `NoWireframe`. Meshes with `Wireframe` will always have a wireframe,
-            // regardless of the global configuration.
-            global: true,
-            // Controls the default color of all wireframes. Used as the default color for global wireframes.
-            // Can be changed per mesh using the `WireframeColor` component.
-            default_color: WHITE.into(),
-        })
         .insert_resource(bevy_flycam::MovementSettings {
             sensitivity: 0.00012,
             speed: 8.0,
         })
-        .add_plugins(bevy_flycam::PlayerPlugin)
         .add_systems(Startup, setup)
         .run();
 }
@@ -55,7 +43,9 @@ pub fn main() {
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut polylines: ResMut<Assets<Polyline>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut line_materials: ResMut<Assets<PolylineMaterial>>,
 ) {
     let resolver = Resolver::new(dirs::document_dir().unwrap().join("lego/penbu/ket.io")).unwrap();
     let mut source_map = SourceMap::new();
@@ -72,29 +62,53 @@ fn setup(
     traverse_design(&source_map, &main_model_name, ctx.clone(), &mut parts);
 
     let mut mesh_handles = HashMap::<String, Handle<Mesh>>::new();
+    let mut polyline_handles = HashMap::<String, Handle<Polyline>>::new();
     let mut mat_handles = HashMap::<ColorCode, Handle<StandardMaterial>>::new();
+
+    let polyline_material = line_materials.add(PolylineMaterial {
+        width: 3.0,
+        color: Color::WHITE.into(),
+        ..default()
+    });
 
     ctx.transform = Mat4::IDENTITY;
 
     for part in &parts {
         if !mesh_handles.contains_key(&part.id) {
             let mut triangles = Default::default();
-            traverse_part(&source_map, &part.id, ctx.clone(), &mut triangles);
-
-            let vertices = triangles
-                .iter()
-                .flatten()
-                .map(glam::Vec3::to_array)
-                .collect::<Vec<_>>();
+            let mut lines = Default::default();
+            traverse_part(
+                &source_map,
+                &part.id,
+                ctx.clone(),
+                &mut triangles,
+                &mut lines,
+            );
 
             let mesh = Mesh::new(
                 PrimitiveTopology::TriangleList,
                 RenderAssetUsages::default(),
             )
-            .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, vertices)
+            .with_inserted_attribute(
+                Mesh::ATTRIBUTE_POSITION,
+                triangles
+                    .iter()
+                    .flatten()
+                    .map(glam::Vec3::to_array)
+                    .collect::<Vec<_>>(),
+            )
             .with_computed_normals();
 
             mesh_handles.insert(part.id.clone(), meshes.add(mesh));
+
+            let mut vertices = vec![];
+            for line in lines {
+                vertices.push(Vec3::from_array(line[0].to_array()));
+                vertices.push(Vec3::from_array(line[1].to_array()));
+                vertices.push(Vec3::splat(f32::NAN));
+            }
+
+            polyline_handles.insert(part.id.clone(), polylines.add(Polyline { vertices }));
         }
 
         if !mat_handles.contains_key(&part.color) {
@@ -109,15 +123,35 @@ fn setup(
             MeshMaterial3d(mat_handles[&part.color].clone()),
             Transform::from_matrix(part.transform),
         ));
+
+        commands.spawn(PolylineBundle {
+            polyline: PolylineHandle(polyline_handles[&part.id].clone()),
+            material: PolylineMaterialHandle(polyline_material.clone()),
+            transform: Transform::from_matrix(part.transform),
+            ..default()
+        });
     }
 
     commands.spawn((
         PointLight {
-            intensity: 5_000_000.0,
             radius: 1.0,
             ..default()
         },
         Transform::from_xyz(6.0, 8.0, -10.0),
+    ));
+
+    commands.spawn((
+        Camera3d::default(),
+        Exposure::INDOOR,
+        Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+        bevy_flycam::FlyCam,
+        bevy_edge_detection::EdgeDetection {
+            normal_thickness: 2.0,
+            depth_thickness: 2.0,
+            depth_threshold: 0.4,
+            uv_distortion_strength: Vec2::ZERO,
+            ..default()
+        },
     ));
 }
 
@@ -167,7 +201,8 @@ pub fn traverse_part(
     source_map: &SourceMap,
     model_name: &str,
     ctx: GeometryContext,
-    output: &mut Vec<[glam::Vec3; 3]>,
+    triangles: &mut Vec<[glam::Vec3; 3]>,
+    lines: &mut Vec<[glam::Vec3; 2]>,
 ) {
     let Some(model) = source_map.get(model_name) else {
         panic!("{model_name}");
@@ -203,19 +238,19 @@ pub fn traverse_part(
             }
             Command::SubFileRef(sfrc) => {
                 let child = ctx.child(sfrc, invert_next);
-                traverse_part(source_map, &sfrc.file, child, output);
+                traverse_part(source_map, &sfrc.file, child, triangles, lines);
                 invert_next = false;
             }
-            Command::Line(_line) => {}
+            Command::Line(l) => lines.push(ctx.project(l.vertices)),
             Command::Triangle(t) => {
                 assert!(!invert_next);
 
                 // TODO: color of individual polygons
                 let [a, b, c] = ctx.project(t.vertices);
                 if effective_winding == Winding::Ccw {
-                    output.push([a, b, c]);
+                    triangles.push([a, b, c]);
                 } else {
-                    output.push([c, b, a]);
+                    triangles.push([c, b, a]);
                 }
             }
             Command::Quad(q) => {
@@ -223,11 +258,11 @@ pub fn traverse_part(
 
                 let [a, b, c, d] = ctx.project(q.vertices);
                 if effective_winding == Winding::Ccw {
-                    output.push([a, b, c]);
-                    output.push([c, d, a]);
+                    triangles.push([a, b, c]);
+                    triangles.push([c, d, a]);
                 } else {
-                    output.push([c, b, a]);
-                    output.push([a, d, c]);
+                    triangles.push([c, b, a]);
+                    triangles.push([a, d, c]);
                 }
             }
             _ => {}
