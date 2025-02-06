@@ -13,6 +13,7 @@ use bevy::{
         camera::Exposure,
         mesh::PrimitiveTopology,
         settings::{Backends, RenderCreation, WgpuSettings},
+        view::VisibilitySystems,
         RenderPlugin,
     },
     utils::HashMap,
@@ -33,9 +34,10 @@ pub fn main() {
         ))
         .insert_resource(bevy_flycam::MovementSettings {
             sensitivity: 0.00012,
-            speed: 8.0,
+            speed: 15.0,
         })
         .add_systems(Startup, setup)
+        .add_systems(PostUpdate, vis.after(VisibilitySystems::CheckVisibility))
         .run();
 }
 
@@ -126,25 +128,25 @@ fn setup(
             mat_handles.insert(part.color, materials.add(color));
         }
 
-        commands.spawn((
-            Mesh3d(mesh_handles[&part.id].clone()),
-            MeshMaterial3d(mat_handles[&part.color].clone()),
-            Transform::from_matrix(part.transform),
-        ));
+        commands
+            .spawn((
+                Mesh3d(mesh_handles[&part.id].clone()),
+                MeshMaterial3d(mat_handles[&part.color].clone()),
+                Transform::from_matrix(part.transform),
+            ))
+            .with_children(|parent| {
+                parent.spawn(PolylineBundle {
+                    polyline: PolylineHandle(polyline_handles[&part.id].clone()),
+                    material: PolylineMaterialHandle(line_material.clone()),
+                    ..default()
+                });
 
-        commands.spawn(PolylineBundle {
-            polyline: PolylineHandle(polyline_handles[&part.id].clone()),
-            material: PolylineMaterialHandle(line_material.clone()),
-            transform: Transform::from_matrix(part.transform),
-            ..default()
-        });
-
-        commands.spawn(PolylineBundle {
-            polyline: PolylineHandle(opt_polyline_handles[&part.id].clone()),
-            material: PolylineMaterialHandle(opt_line_material.clone()),
-            transform: Transform::from_matrix(part.transform),
-            ..default()
-        });
+                parent.spawn(PolylineBundle {
+                    polyline: PolylineHandle(opt_polyline_handles[&part.id].clone()),
+                    material: PolylineMaterialHandle(opt_line_material.clone()),
+                    ..default()
+                });
+            });
     }
 
     commands.spawn((
@@ -157,16 +159,13 @@ fn setup(
 
     commands.spawn((
         Camera3d::default(),
+        PerspectiveProjection {
+            far: 0.01,
+            ..default()
+        },
         Exposure::INDOOR,
         Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
         bevy_flycam::FlyCam,
-        bevy_edge_detection::EdgeDetection {
-            normal_thickness: 2.0,
-            depth_thickness: 2.0,
-            depth_threshold: 0.4,
-            uv_distortion_strength: Vec2::ZERO,
-            ..default()
-        },
     ));
 }
 
@@ -300,5 +299,22 @@ fn traverse_part(
             }
             _ => {}
         }
+    }
+}
+
+fn vis(
+    meshes: Query<&ViewVisibility, With<Mesh3d>>,
+    mut polylines: Query<(&mut Visibility, &Parent), With<PolylineHandle>>,
+) {
+    for (mut child_vis, parent_id) in polylines.iter_mut() {
+        let Ok(parent_vis) = meshes.get(parent_id.get()) else {
+            continue;
+        };
+
+        *child_vis = if parent_vis.get() {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
     }
 }
