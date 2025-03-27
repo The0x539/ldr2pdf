@@ -1,0 +1,16 @@
+[package]
+name = "ldr2pdf_ins_xml"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ldr2pdf_common = { path = "../common" }
+glam = { workspace = true }
+zip = { workspace = true }
+tidier = { workspace = true }
+
+quick-xml = { version = "0.37.1", features = ["serialize"] }
+walkdir = "2.5.0"
+pretty_assertions = "1.4.1"
+serde = { version = "1.0.216", features = ["derive"] }
+serde_with = "3.11.0"

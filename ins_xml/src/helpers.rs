@@ -6,9 +6,7 @@ use serde_with::{DeserializeAs, DisplayFromStr};
 use std::fmt::{Display, Write};
 use std::str::FromStr;
 
-use crate::instruction::page::SizeGuidePart;
-
-use super::page::ResizeBar;
+use crate::page::{ResizeBar, SizeGuidePart};
 
 #[derive(Debug)]
 enum SeparatedError {

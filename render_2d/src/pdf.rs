@@ -1,4 +1,4 @@
-use crate::{ldr::ColorMap, Point, Primitive};
+use ldr2pdf_common::{ldr::ColorMap, Point, Primitive};
 
 use lopdf::{
     content::{Content, Operation},

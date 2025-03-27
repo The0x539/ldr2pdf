@@ -1,0 +1,8 @@
+[package]
+name = "ldr2pdf_xml_fmt"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ldr2pdf_common = { path = "../common" }
+tidier = { workspace = true }

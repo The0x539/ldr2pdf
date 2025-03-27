@@ -1,9 +1,9 @@
-use crate::{
+use bevy_flycam::NoCameraPlayerPlugin;
+use bevy_polyline::prelude::*;
+use ldr2pdf_common::{
     ldr::{new_color, ColorCode, ColorMap, GeometryContext, Winding},
     resolver::Resolver,
 };
-use bevy_flycam::NoCameraPlayerPlugin;
-use bevy_polyline::prelude::*;
 use weldr::{Command, Mat4, SourceMap};
 
 use bevy::{
@@ -19,7 +19,7 @@ use bevy::{
     utils::HashMap,
 };
 
-pub fn main() {
+fn main() {
     App::new()
         .add_plugins((
             DefaultPlugins.set(RenderPlugin {

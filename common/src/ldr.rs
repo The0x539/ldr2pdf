@@ -61,9 +61,9 @@ impl std::ops::Not for Winding {
 
 #[derive(Clone)]
 pub struct GeometryContext {
-    pub(crate) transform: Mat4,
-    pub(crate) color: ColorCode,
-    pub(crate) inverted: bool,
+    pub transform: Mat4,
+    pub color: ColorCode,
+    pub inverted: bool,
 }
 
 impl GeometryContext {
