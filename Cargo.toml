@@ -2,6 +2,10 @@
 resolver = "2"
 members = ["render_2d", "render_3d", "xml_fmt", "ins_xml", "common"]
 
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
 [profile.bevy]
 inherits = "dev"
 opt-level = 1
@@ -16,4 +20,4 @@ tidier = "0.5.3"
 
 # weldr = "0.3.1"
 # weldr = { git = "https://github.com/ScanMountGoat/weldr" }
-weldr = { git = "https://github.com/djeedai/weldr" }
+weldr.git = "https://github.com/djeedai/weldr" 

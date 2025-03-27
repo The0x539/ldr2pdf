@@ -1,10 +1,10 @@
 [package]
 name = "ldr2pdf_render_2d"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
-ldr2pdf_common = { path = "../common" }
-weldr = { workspace = true }
+ldr2pdf_common.path = "../common"
+weldr.workspace = true
 
 lopdf = "0.34.0"

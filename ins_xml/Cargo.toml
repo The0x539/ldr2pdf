@@ -1,13 +1,13 @@
 [package]
 name = "ldr2pdf_ins_xml"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
-ldr2pdf_common = { path = "../common" }
-glam = { workspace = true }
-zip = { workspace = true }
-tidier = { workspace = true }
+ldr2pdf_common.path = "../common"
+glam.workspace = true
+zip.workspace = true
+tidier.workspace = true
 
 quick-xml = { version = "0.37.1", features = ["serialize"] }
 walkdir = "2.5.0"
