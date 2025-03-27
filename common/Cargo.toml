@@ -1,11 +1,11 @@
 [package]
 name = "ldr2pdf_common"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
-weldr = { workspace = true }
-glam = { workspace = true }
-zip = { workspace = true }
+weldr.workspace = true
+glam.workspace = true
+zip.workspace = true
 
 slab = "0.4.9"

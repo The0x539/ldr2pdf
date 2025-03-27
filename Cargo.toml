@@ -9,6 +9,10 @@ members = [
   "bevy_lines",
 ]
 
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
 [profile.bevy]
 inherits = "dev"
 opt-level = 1
@@ -23,4 +27,4 @@ tidier = "0.5.3"
 
 # weldr = "0.3.1"
 # weldr = { git = "https://github.com/ScanMountGoat/weldr" }
-weldr = { git = "https://github.com/djeedai/weldr" }
+weldr.git = "https://github.com/djeedai/weldr" 
