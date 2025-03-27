@@ -206,14 +206,17 @@ impl SpecializedRenderPipeline for PolylinePipeline {
             false => TextureFormat::bevy_default(),
         };
 
-        let mut vertex_layout = VertexBufferLayout {
-            step_mode: VertexStepMode::Instance,
-            array_stride: VertexFormat::Float32x3.size(),
-            attributes: vec![VertexAttribute {
-                format: VertexFormat::Float32x3,
-                offset: 0,
-                shader_location: 0,
-            }],
+        let vertex_layout = |offset, shader_location| {
+            let format = VertexFormat::Float32x3;
+            VertexBufferLayout {
+                step_mode: VertexStepMode::Instance,
+                array_stride: 2 * format.size(),
+                attributes: vec![VertexAttribute {
+                    format,
+                    offset: offset * format.size(),
+                    shader_location,
+                }],
+            }
         };
 
         RenderPipelineDescriptor {
@@ -221,10 +224,7 @@ impl SpecializedRenderPipeline for PolylinePipeline {
                 shader: self.shader.clone(),
                 entry_point: "vertex".into(),
                 shader_defs: shader_defs.clone(),
-                buffers: vec![vertex_layout.clone(), {
-                    vertex_layout.attributes[0].shader_location = 1;
-                    vertex_layout
-                }],
+                buffers: vec![vertex_layout(0, 0), vertex_layout(1, 1)],
             },
             fragment: Some(FragmentState {
                 shader: self.shader.clone(),
@@ -395,22 +395,19 @@ impl<P: PhaseItem> RenderCommand<P> for DrawPolyline {
         polylines: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        if let Some(gpu_polyline) = polylines.into_inner().get(&pl_handle.unwrap().0) {
-            if gpu_polyline.vertex_count < 2 {
-                return RenderCommandResult::Success;
-            }
-
-            let item_size = VertexFormat::Float32x3.size();
-            let buffer_size = gpu_polyline.vertex_buffer.size() - item_size;
-            pass.set_vertex_buffer(0, gpu_polyline.vertex_buffer.slice(..buffer_size));
-            pass.set_vertex_buffer(1, gpu_polyline.vertex_buffer.slice(item_size..));
-
-            let num_instances = gpu_polyline.vertex_count.max(1) - 1;
-            pass.draw(0..6, 0..num_instances);
-
-            RenderCommandResult::Success
-        } else {
-            RenderCommandResult::Failure("Error loading gpu polyline")
+        let Some(gpu_polyline) = polylines.into_inner().get(&pl_handle.unwrap().0) else {
+            return RenderCommandResult::Failure("Error loading gpu polyline");
+        };
+        if gpu_polyline.vertex_count < 2 {
+            return RenderCommandResult::Success;
         }
+
+        pass.set_vertex_buffer(0, gpu_polyline.vertex_buffer.slice(..));
+        pass.set_vertex_buffer(1, gpu_polyline.vertex_buffer.slice(..));
+
+        let num_instances = gpu_polyline.vertex_count / 2;
+        pass.draw(0..6, 0..num_instances);
+
+        RenderCommandResult::Success
     }
 }

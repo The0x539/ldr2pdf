@@ -1,7 +1,7 @@
 use bevy_flycam::NoCameraPlayerPlugin;
 use bevy_lines::prelude::*;
 use ldr2pdf_common::{
-    ldr::{new_color, ColorCode, ColorMap, GeometryContext, Winding},
+    ldr::{ColorCode, ColorMap, GeometryContext, Winding, new_color},
     resolver::Resolver,
 };
 use weldr::{Command, Mat4, SourceMap};
@@ -10,11 +10,11 @@ use bevy::{
     asset::RenderAssetUsages,
     prelude::*,
     render::{
+        RenderPlugin,
         camera::Exposure,
         mesh::PrimitiveTopology,
         settings::{Backends, RenderCreation, WgpuSettings},
         view::VisibilitySystems,
-        RenderPlugin,
     },
     utils::HashMap,
 };
@@ -42,9 +42,8 @@ fn main() {
 }
 
 fn make_polyline(lines: impl IntoIterator<Item = [Vec3; 2]>) -> Polyline {
-    let null = Vec3::splat(f32::NAN);
     Polyline {
-        vertices: lines.into_iter().flat_map(|[a, b]| [a, b, null]).collect(),
+        vertices: lines.into_iter().flatten().collect(),
     }
 }
 
