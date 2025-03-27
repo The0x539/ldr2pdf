@@ -1,0 +1,21 @@
+[package]
+edition = "2021"
+name = "bevy_lines"
+version = "0.1.0"
+description = "Thick Line Rendering for Bevy, forked from bevy_polyline"
+license = "MIT OR Apache-2.0"
+authors = [
+  "Foresight Mining Software Corporation",
+  "Jonas Matser",
+  "Aevyrie Roessler",
+  "The0x539",
+]
+
+[dependencies]
+bitflags = "2.3"
+bytemuck = "1.16.1"
+
+[dependencies.bevy]
+version = "0.15"
+default-features = false
+features = ["bevy_core_pipeline", "bevy_render", "bevy_asset"]

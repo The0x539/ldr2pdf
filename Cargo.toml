@@ -1,6 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["render_2d", "render_3d", "xml_fmt", "ins_xml", "common"]
+members = [
+  "render_2d",
+  "render_3d",
+  "xml_fmt",
+  "ins_xml",
+  "common",
+  "bevy_lines",
+]
 
 [profile.bevy]
 inherits = "dev"

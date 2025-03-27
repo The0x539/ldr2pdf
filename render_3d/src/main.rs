@@ -1,5 +1,5 @@
 use bevy_flycam::NoCameraPlayerPlugin;
-use bevy_polyline::prelude::*;
+use bevy_lines::prelude::*;
 use ldr2pdf_common::{
     ldr::{new_color, ColorCode, ColorMap, GeometryContext, Winding},
     resolver::Resolver,

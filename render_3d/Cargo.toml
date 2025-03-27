@@ -13,4 +13,4 @@ dirs = "6.0.0"
 bevy = { version = "0.15.1", features = ["dynamic_linking"] }
 bevy_edge_detection = "0.15.4"
 bevy_flycam = "0.15.0"
-bevy_polyline = "0.11.0"
+bevy_lines.path = "../bevy_lines"

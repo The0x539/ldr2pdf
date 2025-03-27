@@ -807,6 +807,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_lines"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bitflags 2.9.0",
+ "bytemuck",
+]
+
+[[package]]
 name = "bevy_log"
 version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -933,17 +942,6 @@ dependencies = [
  "bevy_window",
  "crossbeam-channel",
  "uuid",
-]
-
-[[package]]
-name = "bevy_polyline"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bbf333dab4a712f63456aa64b8e06268a44afdcbc9be4780e6260a0e8113072"
-dependencies = [
- "bevy",
- "bitflags 2.9.0",
- "bytemuck",
 ]
 
 [[package]]
@@ -2867,7 +2865,7 @@ dependencies = [
  "bevy",
  "bevy_edge_detection",
  "bevy_flycam",
- "bevy_polyline",
+ "bevy_lines",
  "dirs",
  "glam 0.23.0",
  "ldr2pdf_common",
