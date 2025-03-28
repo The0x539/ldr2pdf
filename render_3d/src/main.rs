@@ -43,6 +43,7 @@ fn main() {
 
 fn setup(
     mut commands: Commands,
+    mut ambient_light: ResMut<AmbientLight>,
 
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -154,6 +155,7 @@ fn setup(
         },
         Transform::from_xyz(6.0, 8.0, -10.0),
     ));
+    ambient_light.brightness = 220.0;
 
     commands.spawn((
         Camera3d::default(),
