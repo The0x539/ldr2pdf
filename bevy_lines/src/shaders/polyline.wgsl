@@ -37,9 +37,17 @@ struct Line {
     intercept: f32,
 }
 
-fn project(point: vec3<f32>) -> vec3<f32> {
-    let homogenous = view.clip_from_world * polyline.model * vec4(point, 1.0);
-    return homogenous.xyz;
+fn project_1(point: vec3<f32>) -> vec4<f32> {
+    return view.clip_from_world * polyline.model * vec4(point, 1.0);
+}
+
+fn project_2(point: vec4<f32>) -> vec2<f32> {
+    let resolution = view.viewport.zw;
+    return resolution * (0.5 * point.xy / point.w + 0.5);
+}
+
+fn project(point: vec3<f32>) -> vec2<f32> {
+    return project_2(project_1(point));
 }
 
 fn find_line(a: vec2<f32>, b: vec2<f32>) -> Line {
@@ -73,8 +81,8 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let position = positions[vertex.index];
 
     // algorithm based on https://wwwtyro.net/2019/11/18/instanced-lines.html
-    var clip0 = view.clip_from_world * polyline.model * vec4(vertex.point_a, 1.0);
-    var clip1 = view.clip_from_world * polyline.model * vec4(vertex.point_b, 1.0);
+    var clip0 = project_1(vertex.point_a);
+    var clip1 = project_1(vertex.point_b);
 
     // Manual near plane clipping to avoid errors when doing the perspective divide inside this shader.
     clip0 = clip_near_plane(clip0, clip1);
@@ -82,9 +90,8 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
     let clip = mix(clip0, clip1, position.z);
 
-    let resolution = vec2(view.viewport.z, view.viewport.w);
-    let screen0 = resolution * (0.5 * clip0.xy / clip0.w + 0.5);
-    let screen1 = resolution * (0.5 * clip1.xy / clip1.w + 0.5);
+    var screen0 = project_2(clip0);
+    var screen1 = project_2(clip1);
 
     let x_basis = normalize(screen1 - screen0);
     let y_basis = vec2(-x_basis.y, x_basis.x);
@@ -100,6 +107,22 @@ fn vertex(vertex: Vertex) -> VertexOutput {
             line_width = 1.0;
         }
     #endif
+
+    if any(vertex.control_point_a != vertex.point_a) {
+        var pa = project(vertex.point_a);
+        var pb = project(vertex.point_b);
+        var cpa = project(vertex.control_point_a);
+        var cpb = project(vertex.control_point_b);
+        let intersection = find_intersection(find_line(pa, pb), find_line(cpa, cpb));
+        
+        let x0 = min(cpa.x, cpb.x);
+        let x1 = max(cpa.x, cpb.x);
+        let intersects = intersection.x >= x0 && intersection.x <= x1;
+
+        if intersects {
+            line_width = 0.0;
+        }
+    }
 
     let pt_offset = line_width * (position.x * x_basis + position.y * y_basis);
     let pt0 = screen0 + pt_offset;
@@ -121,30 +144,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         depth = depth * exp2(-material.depth_bias * log2(clip.w / depth - epsilon));
     }
 
-    if any(vertex.control_point_a != vertex.point_a) {
-        // something about this is broken
-        // I can't tell whether it's a fundamental problem with LDraw optional lines or a bug in my code
-        // it seems to be a matter of incorrect projection - would it work in isometric graphics?
-
-        let pa = project(vertex.point_a).xz + vec2(0.0001); // hack for vertical lines
-        let pb = project(vertex.point_b).xz;
-        let cpa = project(vertex.control_point_a).xz + vec2(0.0001);
-        let cpb = project(vertex.control_point_b).xz;
-        let intersection = find_intersection(find_line(pa, pb), find_line(cpa, cpb));
-        
-        let x0 = min(cpa.x, cpb.x);
-        let x1 = max(cpa.x, cpb.x);
-        let intersects = intersection.x >= x0 && intersection.x <= x1;
-
-        if intersects {
-            color = vec4(0.0, 0.0, 0.0, 0.25);
-        } else if intersection.x < x0 {
-            color = vec4(0.0, 1.0, 0.5, 1.0);
-        } else if intersection.x > x1 {
-            color = vec4(0.0, 0.5, 1.0, 1.0);
-        }
-    }
-
+    let resolution = view.viewport.zw;
     return VertexOutput(vec4(clip.w * ((2.0 * pt) / resolution - 1.0), depth, clip.w), color);
 }
 

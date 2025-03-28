@@ -76,8 +76,7 @@ fn setup(
 
     let opt_line_material = line_materials.add(PolylineMaterial {
         width: 6.0,
-        color: Color::srgba(1.0, 1.0, 1.0, 0.999).into(),
-        // depth_bias: 0.1,
+        color: Color::BLACK.into(),
         ..default()
     });
 
