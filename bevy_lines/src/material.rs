@@ -1,6 +1,6 @@
 use crate::polyline::{
-    DrawPolyline, PolylineHandle, PolylinePipeline, PolylinePipelineKey, PolylineUniform,
-    PolylineViewBindGroup, SetPolylineBindGroup,
+    DrawPolyline, GpuPolyline, PolylineHandle, PolylinePipeline, PolylinePipelineKey,
+    PolylineUniform, PolylineViewBindGroup, SetPolylineBindGroup,
 };
 
 use bevy::{
@@ -288,7 +288,8 @@ pub fn queue_material_polylines(
     mut pipelines: ResMut<SpecializedRenderPipelines<PolylineMaterialPipeline>>,
     pipeline_cache: Res<PipelineCache>,
     render_materials: Res<RenderAssets<GpuPolylineMaterial>>,
-    material_meshes: Query<(&PolylineMaterialHandle, &PolylineUniform)>,
+    render_polylines: Res<RenderAssets<GpuPolyline>>,
+    material_meshes: Query<(&PolylineMaterialHandle, &PolylineUniform, &PolylineHandle)>,
     views: Query<(Entity, &ExtractedView, &RenderVisibleEntities, &Msaa)>,
     mut opaque_phases: ResMut<ViewBinnedRenderPhases<Opaque3d>>,
     mut alpha_mask_phases: ResMut<ViewBinnedRenderPhases<AlphaMask3d>>,
@@ -309,11 +310,15 @@ pub fn queue_material_polylines(
         let mut polyline_key = PolylinePipelineKey::from_msaa_samples(msaa.samples());
         polyline_key |= PolylinePipelineKey::from_hdr(view.hdr);
         for (visible_entity, visible_main_entity) in visible_entities.get::<WithPolyline>() {
-            let Ok((material_handle, polyline_uniform)) = material_meshes.get(*visible_entity)
+            let Ok((material_handle, polyline_uniform, polyline_handle)) =
+                material_meshes.get(*visible_entity)
             else {
                 continue;
             };
             let Some(material) = render_materials.get(&material_handle.0) else {
+                continue;
+            };
+            let Some(polyline) = render_polylines.get(&polyline_handle.0) else {
                 continue;
             };
             if material.alpha_mode == AlphaMode::Blend {
@@ -321,6 +326,9 @@ pub fn queue_material_polylines(
             }
             if material.perspective {
                 polyline_key |= PolylinePipelineKey::PERSPECTIVE
+            }
+            if polyline.control_vertex_buffer.is_some() {
+                polyline_key |= PolylinePipelineKey::CONTROL_POINTS
             }
             let pipeline_id =
                 pipelines.specialize(&pipeline_cache, &material_pipeline, polyline_key);

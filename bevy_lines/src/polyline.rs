@@ -66,6 +66,7 @@ pub struct PolylineBundle {
 #[derive(Debug, Default, Asset, Clone, TypePath)]
 pub struct Polyline {
     pub vertices: Vec<Vec3>,
+    pub control_vertices: Option<Vec<Vec3>>,
 }
 
 #[derive(Debug, Clone, Default, Component)]
@@ -81,15 +82,22 @@ impl RenderAsset for GpuPolyline {
         polyline: Self::SourceAsset,
         render_device: &mut bevy::ecs::system::SystemParamItem<Self::Param>,
     ) -> Result<Self, PrepareAssetError<Self::SourceAsset>> {
-        let vertex_buffer_data = bytemuck::cast_slice(polyline.vertices.as_slice());
-        let vertex_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
-            usage: BufferUsages::VERTEX,
-            label: Some("Polyline Vertex Buffer"),
-            contents: vertex_buffer_data,
-        });
+        let prepare_buffer = |vertices: &[Vec3], label| {
+            render_device.create_buffer_with_data(&BufferInitDescriptor {
+                usage: BufferUsages::VERTEX,
+                label: Some(label),
+                contents: bytemuck::cast_slice(vertices),
+            })
+        };
+
+        let vertex_buffer = prepare_buffer(&polyline.vertices, "Polyline Vertex Buffer");
+        let control_vertex_buffer = polyline
+            .control_vertices
+            .map(|v| prepare_buffer(&v, "Polyline Control Vertex Buffer"));
 
         Ok(GpuPolyline {
             vertex_buffer,
+            control_vertex_buffer,
             vertex_count: polyline.vertices.len() as u32,
         })
     }
@@ -104,6 +112,7 @@ pub struct PolylineUniform {
 #[derive(Debug, Clone)]
 pub struct GpuPolyline {
     pub vertex_buffer: Buffer,
+    pub control_vertex_buffer: Option<Buffer>,
     pub vertex_count: u32,
 }
 
@@ -206,7 +215,7 @@ impl SpecializedRenderPipeline for PolylinePipeline {
             false => TextureFormat::bevy_default(),
         };
 
-        let vertex_layout = |offset, shader_location| {
+        let make_layout = |shader_location, offset| {
             let format = VertexFormat::Float32x3;
             VertexBufferLayout {
                 step_mode: VertexStepMode::Instance,
@@ -224,7 +233,12 @@ impl SpecializedRenderPipeline for PolylinePipeline {
                 shader: self.shader.clone(),
                 entry_point: "vertex".into(),
                 shader_defs: shader_defs.clone(),
-                buffers: vec![vertex_layout(0, 0), vertex_layout(1, 1)],
+                buffers: vec![
+                    make_layout(0, 0),
+                    make_layout(1, 1),
+                    make_layout(2, 0),
+                    make_layout(3, 1),
+                ],
             },
             fragment: Some(FragmentState {
                 shader: self.shader.clone(),
@@ -284,6 +298,7 @@ bitflags::bitflags! {
         const PERSPECTIVE = (1 << 0);
         const TRANSPARENT_MAIN_PASS = (1 << 1);
         const HDR = (1 << 2);
+        const CONTROL_POINTS = (1 << 3);
         const MSAA_RESERVED_BITS = Self::MSAA_MASK_BITS << Self::MSAA_SHIFT_BITS;
     }
 }
@@ -402,8 +417,19 @@ impl<P: PhaseItem> RenderCommand<P> for DrawPolyline {
             return RenderCommandResult::Success;
         }
 
-        pass.set_vertex_buffer(0, gpu_polyline.vertex_buffer.slice(..));
-        pass.set_vertex_buffer(1, gpu_polyline.vertex_buffer.slice(..));
+        let vertices = || gpu_polyline.vertex_buffer.slice(..);
+        let control_vertices = || {
+            gpu_polyline
+                .control_vertex_buffer
+                .as_ref()
+                .unwrap_or(&gpu_polyline.vertex_buffer)
+                .slice(..)
+        };
+
+        pass.set_vertex_buffer(0, vertices());
+        pass.set_vertex_buffer(1, vertices());
+        pass.set_vertex_buffer(2, control_vertices());
+        pass.set_vertex_buffer(3, control_vertices());
 
         let num_instances = gpu_polyline.vertex_count / 2;
         pass.draw(0..6, 0..num_instances);

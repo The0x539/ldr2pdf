@@ -22,6 +22,8 @@ var<uniform> material: PolylineMaterial;
 struct Vertex {
     @location(0) point_a: vec3<f32>,
     @location(1) point_b: vec3<f32>,
+    @location(2) control_point_a: vec3<f32>,
+    @location(3) control_point_b: vec3<f32>,
     @builtin(vertex_index) index: u32,
 };
 
@@ -29,6 +31,34 @@ struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) color: vec4<f32>,
 };
+
+struct Line {
+    slope: f32,
+    intercept: f32,
+}
+
+fn project(point: vec3<f32>) -> vec3<f32> {
+    let homogenous = view.clip_from_world * polyline.model * vec4(point, 1.0);
+    return homogenous.xyz;
+}
+
+fn find_line(a: vec2<f32>, b: vec2<f32>) -> Line {
+    let slope = (b.y - a.y) / (b.x - a.x);
+    let intercept = a.y - slope * a.x;
+    return Line(slope, intercept);
+}
+
+fn find_intersection(y1: Line, y2: Line) -> vec2<f32> {
+    // y1 = m1x + b1
+    // y2 = m2x + b2
+    // m1x + b1 = m2x + b2
+    // m1x - m2x = b2 - b1
+    // (m1 - m2)x = b2 - b1
+    // x = (b2 - b1) / (m1 - m2)
+    let x = (y2.intercept - y1.intercept) / (y1.slope - y2.slope);
+    let y = y1.slope * x + y1.intercept;
+    return vec2(x, y);
+}
 
 @vertex
 fn vertex(vertex: Vertex) -> VertexOutput {
@@ -77,7 +107,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let pt = mix(pt0, pt1, position.z);
 
     var depth: f32 = clip.z;
-    if (material.depth_bias >= 0.0) {
+    if material.depth_bias >= 0.0 {
         depth = depth * (1.0 - material.depth_bias);
     } else {
         let epsilon = 4.88e-04;
@@ -89,6 +119,30 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         // The reason this uses an exponential function is that it makes it much easier for the
         // user to chose a value that is convinient for them
         depth = depth * exp2(-material.depth_bias * log2(clip.w / depth - epsilon));
+    }
+
+    if any(vertex.control_point_a != vertex.point_a) {
+        // something about this is broken
+        // I can't tell whether it's a fundamental problem with LDraw optional lines or a bug in my code
+        // it seems to be a matter of incorrect projection - would it work in isometric graphics?
+
+        let pa = project(vertex.point_a).xz + vec2(0.0001); // hack for vertical lines
+        let pb = project(vertex.point_b).xz;
+        let cpa = project(vertex.control_point_a).xz + vec2(0.0001);
+        let cpb = project(vertex.control_point_b).xz;
+        let intersection = find_intersection(find_line(pa, pb), find_line(cpa, cpb));
+        
+        let x0 = min(cpa.x, cpb.x);
+        let x1 = max(cpa.x, cpb.x);
+        let intersects = intersection.x >= x0 && intersection.x <= x1;
+
+        if intersects {
+            color = vec4(0.0, 0.0, 0.0, 0.25);
+        } else if intersection.x < x0 {
+            color = vec4(0.0, 1.0, 0.5, 1.0);
+        } else if intersection.x > x1 {
+            color = vec4(0.0, 0.5, 1.0, 1.0);
+        }
     }
 
     return VertexOutput(vec4(clip.w * ((2.0 * pt) / resolution - 1.0), depth, clip.w), color);

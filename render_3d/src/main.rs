@@ -41,12 +41,6 @@ fn main() {
         .run();
 }
 
-fn make_polyline(lines: impl IntoIterator<Item = [Vec3; 2]>) -> Polyline {
-    Polyline {
-        vertices: lines.into_iter().flatten().collect(),
-    }
-}
-
 fn setup(
     mut commands: Commands,
 
@@ -82,8 +76,8 @@ fn setup(
 
     let opt_line_material = line_materials.add(PolylineMaterial {
         width: 6.0,
-        color: Color::BLACK.into(),
-        depth_bias: 0.1,
+        color: Color::srgba(1.0, 1.0, 1.0, 0.999).into(),
+        // depth_bias: 0.1,
         ..default()
     });
 
@@ -111,10 +105,16 @@ fn setup(
 
             mesh_handles.insert(part.id.clone(), meshes.add(mesh));
 
-            let polyline = make_polyline(primitives.lines);
+            let polyline = Polyline {
+                vertices: primitives.lines.into_iter().flatten().collect(),
+                control_vertices: None,
+            };
             polyline_handles.insert(part.id.clone(), lines.add(polyline));
 
-            let opt_polyline = make_polyline(primitives.opt_lines.iter().map(|&(a, _b)| a));
+            let opt_polyline = Polyline {
+                vertices: primitives.opt_lines.iter().flat_map(|v| v.0).collect(),
+                control_vertices: Some(primitives.opt_lines.iter().flat_map(|v| v.1).collect()),
+            };
             opt_polyline_handles.insert(part.id.clone(), lines.add(opt_polyline));
         }
 
