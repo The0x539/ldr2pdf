@@ -600,15 +600,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy_edge_detection"
-version = "0.15.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16facd959433f01c76ba0c87bd3145eddc3ef6d13f4ff06c63edb4df86079894"
-dependencies = [
- "bevy",
-]
-
-[[package]]
 name = "bevy_encase_derive"
 version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2863,7 +2854,6 @@ name = "ldr2pdf_render_3d"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "bevy_edge_detection",
  "bevy_flycam",
  "bevy_lines",
  "dirs",
