@@ -4,7 +4,7 @@ use ldr2pdf_common::{
     ldr::{ColorCode, ColorMap, GeometryContext, Winding, new_color},
     resolver::Resolver,
 };
-use weldr::{Command, Mat4, SourceMap};
+use weldr::{Command, SourceMap};
 
 use bevy::{
     asset::RenderAssetUsages,
@@ -58,94 +58,33 @@ fn setup(
     let color_map = ColorMap::load("C:/Program Files/Studio 2.0/ldraw/LDConfig.ldr").unwrap();
 
     let mut ctx = GeometryContext::new();
-    ctx.transform = Mat4::from_rotation_z(std::f32::consts::PI)
-        * glam::Mat4::from_scale(glam::Vec3::splat(0.05));
+    ctx.transform = weldr::Mat4::from_rotation_z(std::f32::consts::PI)
+        * weldr::Mat4::from_scale(weldr::Vec3::splat(0.05));
 
     let mut parts = Vec::new();
     traverse_design(&source_map, &main_model_name, ctx.clone(), &mut parts);
 
-    let mut mesh_handles = HashMap::<String, Handle<Mesh>>::new();
-    let mut polyline_handles = HashMap::<String, Handle<Polyline>>::new();
-    let mut opt_polyline_handles = HashMap::<String, Handle<Polyline>>::new();
-    let mut mat_handles = HashMap::<ColorCode, Handle<StandardMaterial>>::new();
-
+    let mut handles = Handles::default();
     let line_material = line_materials.add(PolylineMaterial {
         width: 3.0,
         color: Color::BLACK.into(),
         ..default()
     });
-
     let opt_line_material = line_materials.add(PolylineMaterial {
         width: 6.0,
         color: Color::BLACK.into(),
         ..default()
     });
 
-    ctx.transform = Mat4::IDENTITY;
-
     for part in &parts {
-        if !mesh_handles.contains_key(&part.id) {
-            let mut primitives = Default::default();
-            traverse_part(&source_map, &part.id, ctx.clone(), &mut primitives);
-
-            let mesh = Mesh::new(
-                PrimitiveTopology::TriangleList,
-                RenderAssetUsages::default(),
-            )
-            .with_inserted_attribute(
-                Mesh::ATTRIBUTE_POSITION,
-                primitives
-                    .triangles
-                    .iter()
-                    .flatten()
-                    .map(Vec3::to_array)
-                    .collect::<Vec<_>>(),
-            )
-            .with_computed_normals();
-
-            mesh_handles.insert(part.id.clone(), meshes.add(mesh));
-
-            let polyline = Polyline {
-                vertices: primitives.lines.into_iter().flatten().collect(),
-                control_vertices: None,
-            };
-            polyline_handles.insert(part.id.clone(), lines.add(polyline));
-
-            let opt_polyline = Polyline {
-                vertices: primitives.opt_lines.iter().flat_map(|v| v.0).collect(),
-                control_vertices: Some(primitives.opt_lines.iter().flat_map(|v| v.1).collect()),
-            };
-            opt_polyline_handles.insert(part.id.clone(), lines.add(opt_polyline));
-        }
-
-        if !mat_handles.contains_key(&part.color) {
-            let ldraw_color = color_map.by_code(part.color);
-            let rgb = ldraw_color.value;
-            let alpha = ldraw_color.alpha.unwrap_or(0xFF);
-            let [r, g, b, a] = [rgb.red, rgb.green, rgb.blue, alpha].map(|n| n as f32 / 255.0);
-            let color = Color::srgba(r, g, b, a);
-            mat_handles.insert(part.color, materials.add(color));
-        }
-
-        commands
-            .spawn((
-                Mesh3d(mesh_handles[&part.id].clone()),
-                MeshMaterial3d(mat_handles[&part.color].clone()),
-                Transform::from_matrix(part.transform),
-            ))
-            .with_children(|parent| {
-                parent.spawn(PolylineBundle {
-                    polyline: PolylineHandle(polyline_handles[&part.id].clone()),
-                    material: PolylineMaterialHandle(line_material.clone()),
-                    ..default()
-                });
-
-                parent.spawn(PolylineBundle {
-                    polyline: PolylineHandle(opt_polyline_handles[&part.id].clone()),
-                    material: PolylineMaterialHandle(opt_line_material.clone()),
-                    ..default()
-                });
-            });
+        handles.load_part(&source_map, &part.id, &mut meshes, &mut lines);
+        handles.load_material(&color_map, part.color, &mut materials);
+        handles.spawn_part(
+            &mut commands,
+            part,
+            line_material.clone(),
+            opt_line_material.clone(),
+        );
     }
 
     commands.spawn((
@@ -167,6 +106,120 @@ fn setup(
         Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
         bevy_flycam::FlyCam,
     ));
+}
+
+#[derive(Default)]
+struct Handles {
+    part: HashMap<String, PartHandles>,
+    material: HashMap<ColorCode, Handle<StandardMaterial>>,
+}
+
+#[derive(Clone)]
+struct PartHandles {
+    mesh: Handle<Mesh>,
+    line: Handle<Polyline>,
+    opt_line: Handle<Polyline>,
+}
+
+impl Handles {
+    fn load_part(
+        &mut self,
+        source_map: &SourceMap,
+        part_id: &str,
+        meshes: &mut Assets<Mesh>,
+        lines: &mut Assets<Polyline>,
+    ) {
+        if self.part.contains_key(part_id) {
+            return;
+        }
+
+        let primitives = build_part_mesh(&source_map, &part_id);
+
+        let mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        )
+        .with_inserted_attribute(
+            Mesh::ATTRIBUTE_POSITION,
+            primitives
+                .triangles
+                .iter()
+                .flatten()
+                .map(Vec3::to_array)
+                .collect::<Vec<_>>(),
+        )
+        .with_computed_normals();
+
+        let line = Polyline {
+            vertices: primitives.lines.into_iter().flatten().collect(),
+            control_vertices: None,
+        };
+        let opt_line = Polyline {
+            vertices: primitives.opt_lines.iter().flat_map(|v| v.0).collect(),
+            control_vertices: Some(primitives.opt_lines.iter().flat_map(|v| v.1).collect()),
+        };
+
+        self.part.insert(
+            part_id.to_owned(),
+            PartHandles {
+                mesh: meshes.add(mesh),
+                line: lines.add(line),
+                opt_line: lines.add(opt_line),
+            },
+        );
+    }
+
+    fn load_material(
+        &mut self,
+        color_map: &ColorMap,
+        part_color: ColorCode,
+        materials: &mut Assets<StandardMaterial>,
+    ) {
+        if self.material.contains_key(&part_color) {
+            return;
+        }
+
+        let ldraw_color = color_map.by_code(part_color);
+        let rgb = ldraw_color.value;
+        let alpha = ldraw_color.alpha.unwrap_or(0xFF);
+        let [r, g, b, a] = [rgb.red, rgb.green, rgb.blue, alpha].map(|n| n as f32 / 255.0);
+        let color = Color::srgba(r, g, b, a);
+        self.material.insert(part_color, materials.add(color));
+    }
+
+    fn spawn_part(
+        &self,
+        commands: &mut Commands,
+        part: &Part,
+        line_material: Handle<PolylineMaterial>,
+        opt_line_material: Handle<PolylineMaterial>,
+    ) {
+        let ph = self.part[&part.id].clone();
+
+        let material = MeshMaterial3d(self.material[&part.color].clone());
+        let line_material = PolylineMaterialHandle(line_material.clone());
+        let opt_line_material = PolylineMaterialHandle(opt_line_material.clone());
+
+        commands
+            .spawn((
+                Mesh3d(ph.mesh),
+                material.clone(),
+                Transform::from_matrix(part.transform),
+            ))
+            .with_children(|parent| {
+                parent.spawn(PolylineBundle {
+                    polyline: PolylineHandle(ph.line),
+                    material: line_material.clone(),
+                    ..default()
+                });
+
+                parent.spawn(PolylineBundle {
+                    polyline: PolylineHandle(ph.opt_line),
+                    material: opt_line_material.clone(),
+                    ..default()
+                });
+            });
+    }
 }
 
 struct Part {
@@ -191,13 +244,11 @@ fn traverse_design(
             Command::SubFileRef(sfrc) => {
                 let child_ctx = ctx.child(sfrc, false);
                 if sfrc.file.ends_with(".dat") {
-                    let transform =
-                        bevy::prelude::Mat4::from_cols_array(&child_ctx.transform.to_cols_array());
                     let part = Part {
                         id: sfrc.file.clone(),
                         // TODO: respect currentcolor
                         color: new_color(child_ctx.color, sfrc.color),
-                        transform,
+                        transform: bevy_from_weldr_mat(child_ctx.transform),
                     };
                     output.push(part);
                 } else {
@@ -211,8 +262,12 @@ fn traverse_design(
     }
 }
 
-fn bevy_from_glam(a: glam::Vec3) -> Vec3 {
-    Vec3::from_array(a.to_array())
+fn bevy_from_weldr(a: weldr::Vec3) -> bevy::prelude::Vec3 {
+    bevy::prelude::Vec3::from_array(a.to_array())
+}
+
+fn bevy_from_weldr_mat(a: weldr::Mat4) -> bevy::prelude::Mat4 {
+    bevy::prelude::Mat4::from_cols_array(&a.to_cols_array())
 }
 
 #[derive(Default)]
@@ -220,6 +275,14 @@ struct Primitives {
     triangles: Vec<[Vec3; 3]>,
     lines: Vec<[Vec3; 2]>,
     opt_lines: Vec<([Vec3; 2], [Vec3; 2])>,
+}
+
+fn build_part_mesh(source_map: &SourceMap, model_name: &str) -> Primitives {
+    let mut primitives = Primitives::default();
+    let mut ctx = GeometryContext::new();
+    ctx.transform = weldr::Mat4::IDENTITY;
+    traverse_part(source_map, model_name, ctx, &mut primitives);
+    primitives
 }
 
 fn traverse_part(
@@ -267,18 +330,18 @@ fn traverse_part(
             }
             Command::Line(l) => output
                 .lines
-                .push(ctx.project(l.vertices).map(bevy_from_glam)),
+                .push(ctx.project(l.vertices).map(bevy_from_weldr)),
 
             Command::OptLine(l) => {
                 let [vertices, control_points] =
-                    [l.vertices, l.control_points].map(|x| ctx.project(x).map(bevy_from_glam));
+                    [l.vertices, l.control_points].map(|x| ctx.project(x).map(bevy_from_weldr));
                 output.opt_lines.push((vertices, control_points));
             }
             Command::Triangle(t) => {
                 assert!(!invert_next);
 
                 // TODO: color of individual polygons
-                let [a, b, c] = ctx.project(t.vertices).map(bevy_from_glam);
+                let [a, b, c] = ctx.project(t.vertices).map(bevy_from_weldr);
                 let to_push = if effective_winding == Winding::Ccw {
                     [a, b, c]
                 } else {
@@ -289,7 +352,7 @@ fn traverse_part(
             Command::Quad(q) => {
                 assert!(!invert_next);
 
-                let [a, b, c, d] = ctx.project(q.vertices).map(bevy_from_glam);
+                let [a, b, c, d] = ctx.project(q.vertices).map(bevy_from_weldr);
                 let to_push = if effective_winding == Winding::Ccw {
                     [[a, b, c], [c, d, a]]
                 } else {
