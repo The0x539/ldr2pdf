@@ -1,0 +1,9 @@
+# LTO at any level above `false` (which is above `"off"`) seems to break render_3d,
+# probably due to bevy dynamic linking, which I'm not bothering figuring out how to turn off for release builds
+#
+# I have LTO set to thin in a systemwide cargo config.
+# for some reason that takes precedence over regular Cargo.toml,
+# so this needs to go in this other file.
+
+[profile.release]
+lto = false
