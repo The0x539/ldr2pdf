@@ -47,17 +47,24 @@ impl FileRefResolver for Resolver {
             return Ok(self.root.clone());
         }
 
+        let ldraw = Path::new("C:/Program Files/Studio 2.0/ldraw");
+        let custom = dirs::data_local_dir().unwrap().join("Stud.io/CustomParts");
+
         for dir in [
-            "c:/Users/Andrew/AppData/Local/Stud.io/CustomParts/parts",
-            "c:/Program Files/Studio 2.0/ldraw/p/48",
-            "c:/Program Files/Studio 2.0/ldraw/p",
-            "c:/Program Files/Studio 2.0/ldraw/p/8",
-            "c:/Program Files/Studio 2.0/ldraw/p/4",
-            "c:/Program Files/Studio 2.0/ldraw/parts",
-            "c:/Program Files/Studio 2.0/ldraw/UnOfficial/parts",
-            "c:/Program Files/Studio 2.0/ldraw/UnOfficial/p",
+            custom.join("parts"),
+            ldraw.join("parts"),
+            // primitive quality order: normal, low, high, very low
+            ldraw.join("p"),
+            ldraw.join("p/8"),
+            ldraw.join("p/48"),
+            ldraw.join("p/4"),
+            ldraw.join("UnOfficial/parts"),
+            ldraw.join("UnOfficial/p"),
+            ldraw.join("UnOfficial/p/8"),
+            ldraw.join("UnOfficial/p/48"),
+            ldraw.join("UnOfficial/p/4"),
         ] {
-            let path = Path::new(dir).join(&filename);
+            let path = dir.join(&filename);
             if path.exists() {
                 return std::fs::read(path).map_err(|e| {
                     weldr::ResolveError::new(filename.to_string_lossy().into_owned(), e)
