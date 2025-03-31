@@ -2743,6 +2743,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
+name = "iyes_perf_ui"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4720bd0aedf593bca8017d5a6aac0210a80d38e2d84f37bcfadcd99ab1258951"
+dependencies = [
+ "bevy",
+ "chrono",
+ "num-traits",
+]
+
+[[package]]
 name = "jni"
 version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2859,6 +2870,7 @@ dependencies = [
  "bevy_lines",
  "dirs",
  "glam 0.23.0",
+ "iyes_perf_ui",
  "ldr2pdf_common",
  "weldr",
 ]

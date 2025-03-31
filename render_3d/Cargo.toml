@@ -13,3 +13,4 @@ dirs = "6.0.0"
 bevy = { version = "0.15.3", features = ["dynamic_linking"] }
 bevy_flycam = "0.15.0"
 bevy_lines.path = "../bevy_lines"
+iyes_perf_ui = "0.4.0"

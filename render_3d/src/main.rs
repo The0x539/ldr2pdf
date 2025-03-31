@@ -1,5 +1,6 @@
 use bevy_flycam::NoCameraPlayerPlugin;
 use bevy_lines::prelude::*;
+use iyes_perf_ui::prelude::*;
 use ldr2pdf_common::{
     ldr::{ColorCode, ColorMap, GeometryContext, Winding, new_color},
     resolver::Resolver,
@@ -8,10 +9,12 @@ use weldr::{Command, SourceMap};
 
 use bevy::{
     asset::RenderAssetUsages,
+    diagnostic::{EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin},
     prelude::*,
     render::{
         RenderPlugin,
         camera::Exposure,
+        diagnostic::RenderDiagnosticsPlugin,
         mesh::PrimitiveTopology,
         settings::{Backends, RenderCreation, WgpuSettings},
         view::VisibilitySystems,
@@ -31,6 +34,10 @@ fn main() {
             }),
             PolylinePlugin,
             NoCameraPlayerPlugin,
+            FrameTimeDiagnosticsPlugin,
+            EntityCountDiagnosticsPlugin,
+            RenderDiagnosticsPlugin,
+            PerfUiPlugin,
         ))
         .insert_resource(bevy_flycam::MovementSettings {
             sensitivity: 0.00012,
@@ -106,6 +113,8 @@ fn setup(
         Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
         bevy_flycam::FlyCam,
     ));
+
+    commands.spawn(PerfUiAllEntries::default());
 }
 
 #[derive(Default)]
@@ -200,12 +209,10 @@ impl Handles {
         let line_material = PolylineMaterialHandle(line_material.clone());
         let opt_line_material = PolylineMaterialHandle(opt_line_material.clone());
 
+        let transform = Transform::from_matrix(part.transform);
+
         commands
-            .spawn((
-                Mesh3d(ph.mesh),
-                material.clone(),
-                Transform::from_matrix(part.transform),
-            ))
+            .spawn((Mesh3d(ph.mesh), material.clone(), transform))
             .with_children(|parent| {
                 parent.spawn(PolylineBundle {
                     polyline: PolylineHandle(ph.line),
