@@ -109,10 +109,10 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     #endif
 
     if any(vertex.control_point_a != vertex.point_a) {
-        var pa = project(vertex.point_a);
-        var pb = project(vertex.point_b);
-        var cpa = project(vertex.control_point_a);
-        var cpb = project(vertex.control_point_b);
+        let pa = project(vertex.point_a);
+        let pb = project(vertex.point_b);
+        let cpa = project(vertex.control_point_a);
+        let cpb = project(vertex.control_point_b);
         let intersection = find_intersection(find_line(pa, pb), find_line(cpa, cpb));
         
         let x0 = min(cpa.x, cpb.x);
@@ -120,7 +120,10 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         let intersects = intersection.x >= x0 && intersection.x <= x1;
 
         if intersects {
-            line_width = 0.0;
+            // set something to NaN that will propagate to the output coord
+            let a = 0.0;
+            let b = 0.0;
+            screen0 = vec2(a / b);
         }
     }
 
