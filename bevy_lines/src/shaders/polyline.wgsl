@@ -22,8 +22,10 @@ var<uniform> material: PolylineMaterial;
 struct Vertex {
     @location(0) point_a: vec3<f32>,
     @location(1) point_b: vec3<f32>,
-    @location(2) control_point_a: vec3<f32>,
-    @location(3) control_point_b: vec3<f32>,
+    #ifdef POLYLINE_CONDITIONAL
+        @location(2) control_point_a: vec3<f32>,
+        @location(3) control_point_b: vec3<f32>,
+    #endif
     @builtin(vertex_index) index: u32,
 };
 
@@ -108,7 +110,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         }
     #endif
 
-    if any(vertex.control_point_a != vertex.point_a) {
+    #ifdef POLYLINE_CONDITIONAL
         let pa = project(vertex.point_a);
         let pb = project(vertex.point_b);
         let cpa = project(vertex.control_point_a);
@@ -125,7 +127,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
             let b = 0.0;
             screen0 = vec2(a / b);
         }
-    }
+    #endif
 
     let pt_offset = line_width * (position.x * x_basis + position.y * y_basis);
     let pt0 = screen0 + pt_offset;

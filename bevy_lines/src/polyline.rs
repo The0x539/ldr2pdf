@@ -215,30 +215,30 @@ impl SpecializedRenderPipeline for PolylinePipeline {
             false => TextureFormat::bevy_default(),
         };
 
-        let make_layout = |shader_location, offset| {
-            let format = VertexFormat::Float32x3;
-            VertexBufferLayout {
-                step_mode: VertexStepMode::Instance,
-                array_stride: 2 * format.size(),
-                attributes: vec![VertexAttribute {
-                    format,
-                    offset: offset * format.size(),
-                    shader_location,
-                }],
-            }
-        };
-
         RenderPipelineDescriptor {
             vertex: VertexState {
                 shader: self.shader.clone(),
                 entry_point: "vertex".into(),
                 shader_defs: shader_defs.clone(),
-                buffers: vec![
-                    make_layout(0, 0),
-                    make_layout(1, 1),
-                    make_layout(2, 0),
-                    make_layout(3, 1),
-                ],
+                buffers: {
+                    let format = VertexFormat::Float32x3;
+
+                    let make_layout = |shader_location, offset| VertexBufferLayout {
+                        step_mode: VertexStepMode::Instance,
+                        array_stride: 2 * format.size(),
+                        attributes: vec![VertexAttribute {
+                            format,
+                            offset: offset * format.size(),
+                            shader_location,
+                        }],
+                    };
+
+                    let mut v = vec![make_layout(0, 0), make_layout(1, 1)];
+                    if key.contains(PolylinePipelineKey::CONDITIONAL) {
+                        v.extend([make_layout(2, 0), make_layout(3, 1)]);
+                    }
+                    v
+                },
             },
             fragment: Some(FragmentState {
                 shader: self.shader.clone(),
@@ -298,7 +298,7 @@ bitflags::bitflags! {
         const PERSPECTIVE = (1 << 0);
         const TRANSPARENT_MAIN_PASS = (1 << 1);
         const HDR = (1 << 2);
-        const CONTROL_POINTS = (1 << 3);
+        const CONDITIONAL = (1 << 3);
         const MSAA_RESERVED_BITS = Self::MSAA_MASK_BITS << Self::MSAA_SHIFT_BITS;
     }
 }
@@ -417,19 +417,12 @@ impl<P: PhaseItem> RenderCommand<P> for DrawPolyline {
             return RenderCommandResult::Success;
         }
 
-        let vertices = || gpu_polyline.vertex_buffer.slice(..);
-        let control_vertices = || {
-            gpu_polyline
-                .control_vertex_buffer
-                .as_ref()
-                .unwrap_or(&gpu_polyline.vertex_buffer)
-                .slice(..)
-        };
-
-        pass.set_vertex_buffer(0, vertices());
-        pass.set_vertex_buffer(1, vertices());
-        pass.set_vertex_buffer(2, control_vertices());
-        pass.set_vertex_buffer(3, control_vertices());
+        pass.set_vertex_buffer(0, gpu_polyline.vertex_buffer.slice(..));
+        pass.set_vertex_buffer(1, gpu_polyline.vertex_buffer.slice(..));
+        if let Some(buffer) = &gpu_polyline.control_vertex_buffer {
+            pass.set_vertex_buffer(2, buffer.slice(..));
+            pass.set_vertex_buffer(3, buffer.slice(..));
+        }
 
         let num_instances = gpu_polyline.vertex_count / 2;
         pass.draw(0..6, 0..num_instances);

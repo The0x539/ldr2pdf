@@ -218,6 +218,12 @@ impl SpecializedRenderPipeline for PolylineMaterialPipeline {
                 .shader_defs
                 .push("POLYLINE_PERSPECTIVE".into());
         }
+        if key.contains(PolylinePipelineKey::CONDITIONAL) {
+            descriptor
+                .vertex
+                .shader_defs
+                .push("POLYLINE_CONDITIONAL".into());
+        }
         descriptor.layout = vec![
             self.polyline_pipeline.view_layout.clone(),
             self.polyline_pipeline.polyline_layout.clone(),
@@ -327,9 +333,11 @@ pub fn queue_material_polylines(
             if material.perspective {
                 polyline_key |= PolylinePipelineKey::PERSPECTIVE
             }
-            if polyline.control_vertex_buffer.is_some() {
-                polyline_key |= PolylinePipelineKey::CONTROL_POINTS
-            }
+            // TODO: Are the other pipeline keys supposed to also behave like this?
+            polyline_key.set(
+                PolylinePipelineKey::CONDITIONAL,
+                polyline.control_vertex_buffer.is_some(),
+            );
             let pipeline_id =
                 pipelines.specialize(&pipeline_cache, &material_pipeline, polyline_key);
 
