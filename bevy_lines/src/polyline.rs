@@ -221,22 +221,15 @@ impl SpecializedRenderPipeline for PolylinePipeline {
                 entry_point: "vertex".into(),
                 shader_defs: shader_defs.clone(),
                 buffers: {
-                    let format = VertexFormat::Float32x3;
+                    let mut v = vec![VertexBufferLayout::from_vertex_formats(
+                        VertexStepMode::Instance,
+                        [VertexFormat::Float32x3; 2],
+                    )];
 
-                    let make_layout = |shader_location, offset| VertexBufferLayout {
-                        step_mode: VertexStepMode::Instance,
-                        array_stride: 2 * format.size(),
-                        attributes: vec![VertexAttribute {
-                            format,
-                            offset: offset * format.size(),
-                            shader_location,
-                        }],
-                    };
-
-                    let mut v = vec![make_layout(0, 0), make_layout(1, 1)];
                     if key.contains(PolylinePipelineKey::CONDITIONAL) {
-                        v.extend([make_layout(2, 0), make_layout(3, 1)]);
+                        v.push(v[0].clone().offset_locations_by(2));
                     }
+
                     v
                 },
             },
@@ -418,10 +411,8 @@ impl<P: PhaseItem> RenderCommand<P> for DrawPolyline {
         }
 
         pass.set_vertex_buffer(0, gpu_polyline.vertex_buffer.slice(..));
-        pass.set_vertex_buffer(1, gpu_polyline.vertex_buffer.slice(..));
         if let Some(buffer) = &gpu_polyline.control_vertex_buffer {
-            pass.set_vertex_buffer(2, buffer.slice(..));
-            pass.set_vertex_buffer(3, buffer.slice(..));
+            pass.set_vertex_buffer(1, buffer.slice(..));
         }
 
         let num_instances = gpu_polyline.vertex_count / 2;
