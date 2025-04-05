@@ -17,7 +17,6 @@ use bevy::{
         diagnostic::RenderDiagnosticsPlugin,
         mesh::PrimitiveTopology,
         settings::{Backends, RenderCreation, WgpuSettings},
-        view::VisibilitySystems,
     },
     utils::HashMap,
 };
@@ -44,7 +43,6 @@ fn main() {
             speed: 15.0,
         })
         .add_systems(Startup, setup)
-        .add_systems(PostUpdate, vis.after(VisibilitySystems::CheckVisibility))
         .run();
 }
 
@@ -369,22 +367,5 @@ fn traverse_part(
             }
             _ => {}
         }
-    }
-}
-
-fn vis(
-    meshes: Query<&ViewVisibility, With<Mesh3d>>,
-    mut polylines: Query<(&mut Visibility, &Parent), With<PolylineHandle>>,
-) {
-    for (mut child_vis, parent_id) in polylines.iter_mut() {
-        let Ok(parent_vis) = meshes.get(parent_id.get()) else {
-            continue;
-        };
-
-        *child_vis = if parent_vis.get() {
-            Visibility::Inherited
-        } else {
-            Visibility::Hidden
-        };
     }
 }

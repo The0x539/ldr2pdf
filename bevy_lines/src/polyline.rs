@@ -11,12 +11,13 @@ use bevy::{
     reflect::TypePath,
     render::{
         extract_component::{ComponentUniforms, DynamicUniformIndex, UniformComponentPlugin},
+        primitives::Aabb,
         render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin, RenderAssets},
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::{binding_types::uniform_buffer, *},
         renderer::RenderDevice,
         sync_world::{RenderEntity, SyncToRenderWorld},
-        view::{ViewUniform, ViewUniforms},
+        view::{NoFrustumCulling, ViewUniform, ViewUniforms, VisibilitySystems},
         Extract, Render, RenderApp, RenderSet,
     },
 };
@@ -26,6 +27,10 @@ pub struct PolylineBasePlugin;
 impl Plugin for PolylineBasePlugin {
     fn build(&self, app: &mut App) {
         app.init_asset::<Polyline>()
+            .add_systems(
+                PostUpdate,
+                calculate_bounds.in_set(VisibilitySystems::CalculateBounds),
+            )
             .add_plugins(RenderAssetPlugin::<GpuPolyline>::default());
     }
 }
@@ -151,6 +156,20 @@ pub fn extract_polylines(
     }
     *previous_len = values.len();
     commands.insert_batch_if_new(values);
+}
+
+pub fn calculate_bounds(
+    mut commands: Commands,
+    polylines: Res<Assets<Polyline>>,
+    without_aabb: Query<(Entity, &PolylineHandle), (Without<Aabb>, Without<NoFrustumCulling>)>,
+) {
+    for (entity, polyline_handle) in &without_aabb {
+        if let Some(polyline) = polylines.get(&polyline_handle.0) {
+            if let Some(aabb) = Aabb::enclosing(polyline.vertices.iter().copied()) {
+                commands.entity(entity).try_insert(aabb);
+            }
+        }
+    }
 }
 
 #[derive(Clone, Resource)]
