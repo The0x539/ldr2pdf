@@ -126,25 +126,31 @@ pub fn extract_polylines(
             &ViewVisibility,
             &GlobalTransform,
             &PolylineHandle,
+            &PolylineMaterialHandle,
         )>,
     >,
 ) {
     let mut values = Vec::with_capacity(*previous_len);
-    for (entity, inherited_visibility, view_visibility, transform, handle) in query.iter() {
+    for (entity, inherited_visibility, view_visibility, transform, polyline, material) in
+        query.iter()
+    {
         if !inherited_visibility.get() || !view_visibility.get() {
+            commands.entity(entity).retain::<()>();
             continue;
         }
+
         let transform = transform.compute_matrix();
         values.push((
             entity,
             (
-                PolylineHandle(handle.0.clone_weak()),
+                PolylineHandle(polyline.0.clone_weak()),
                 PolylineUniform { transform },
+                PolylineMaterialHandle(material.0.clone_weak()),
             ),
         ));
     }
     *previous_len = values.len();
-    commands.insert_or_spawn_batch(values);
+    commands.insert_batch_if_new(values);
 }
 
 #[derive(Clone, Resource)]

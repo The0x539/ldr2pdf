@@ -17,7 +17,6 @@ use bevy::{
     },
     prelude::*,
     render::{
-        extract_component::{ExtractComponent, ExtractComponentPlugin},
         render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin, RenderAssets},
         render_phase::*,
         render_resource::{binding_types::uniform_buffer, *},
@@ -31,7 +30,7 @@ use bevy::{
 };
 use std::fmt::Debug;
 
-#[derive(Debug, Clone, Default, Component, ExtractComponent)]
+#[derive(Debug, Clone, Default, Component)]
 pub struct PolylineMaterialHandle(pub Handle<PolylineMaterial>);
 
 #[derive(Asset, Debug, PartialEq, Clone, Copy, TypePath)]
@@ -169,7 +168,6 @@ pub struct PolylineMaterialPlugin;
 impl Plugin for PolylineMaterialPlugin {
     fn build(&self, app: &mut App) {
         app.init_asset::<PolylineMaterial>()
-            .add_plugins(ExtractComponentPlugin::<PolylineMaterialHandle>::default())
             .add_plugins(RenderAssetPlugin::<GpuPolylineMaterial>::default())
             .add_systems(
                 PostUpdate,
