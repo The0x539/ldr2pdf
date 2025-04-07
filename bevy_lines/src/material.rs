@@ -216,12 +216,6 @@ impl SpecializedRenderPipeline for PolylineMaterialPipeline {
                 .shader_defs
                 .push("POLYLINE_PERSPECTIVE".into());
         }
-        if key.contains(PolylinePipelineKey::CONDITIONAL) {
-            descriptor
-                .vertex
-                .shader_defs
-                .push("POLYLINE_CONDITIONAL".into());
-        }
         descriptor.layout = vec![
             self.polyline_pipeline.view_layout.clone(),
             self.polyline_pipeline.polyline_layout.clone(),

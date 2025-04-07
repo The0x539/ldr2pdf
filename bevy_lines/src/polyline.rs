@@ -210,7 +210,6 @@ impl SpecializedRenderPipeline for PolylinePipeline {
     type Key = PolylinePipelineKey;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
-        let shader_defs = Vec::new();
         let (label, blend, depth_write_enabled);
 
         if key.contains(PolylinePipelineKey::TRANSPARENT_MAIN_PASS) {
@@ -240,27 +239,19 @@ impl SpecializedRenderPipeline for PolylinePipeline {
             false => TextureFormat::bevy_default(),
         };
 
-        RenderPipelineDescriptor {
+        let mut descriptor = RenderPipelineDescriptor {
             vertex: VertexState {
                 shader: self.shader.clone(),
                 entry_point: "vertex".into(),
-                shader_defs: shader_defs.clone(),
-                buffers: {
-                    let mut v = vec![VertexBufferLayout::from_vertex_formats(
-                        VertexStepMode::Instance,
-                        [VertexFormat::Float32x3; 2],
-                    )];
-
-                    if key.contains(PolylinePipelineKey::CONDITIONAL) {
-                        v.push(v[0].clone().offset_locations_by(2));
-                    }
-
-                    v
-                },
+                shader_defs: vec![],
+                buffers: vec![VertexBufferLayout::from_vertex_formats(
+                    VertexStepMode::Instance,
+                    [VertexFormat::Float32x3; 2],
+                )],
             },
             fragment: Some(FragmentState {
                 shader: self.shader.clone(),
-                shader_defs,
+                shader_defs: vec![],
                 entry_point: "fragment".into(),
                 targets: vec![Some(ColorTargetState {
                     format,
@@ -302,7 +293,15 @@ impl SpecializedRenderPipeline for PolylinePipeline {
             label: Some(label),
             push_constant_ranges: vec![],
             zero_initialize_workgroup_memory: true,
+        };
+
+        if key.contains(PolylinePipelineKey::CONDITIONAL) {
+            let v = &mut descriptor.vertex;
+            v.shader_defs.push("POLYLINE_CONDITIONAL".into());
+            v.buffers.push(v.buffers[0].clone().offset_locations_by(2));
         }
+
+        descriptor
     }
 }
 
