@@ -2,7 +2,7 @@ use bevy_flycam::NoCameraPlayerPlugin;
 use bevy_lines::prelude::*;
 use iyes_perf_ui::prelude::*;
 use ldr2pdf_common::{
-    ldr::{ColorCode, ColorMap, GeometryContext, Winding, new_color},
+    ldr::{CURRENT_COLOR, ColorCode, ColorMap, GeometryContext, Winding, new_color},
     resolver::Resolver,
 };
 use std::collections::HashMap;
@@ -82,7 +82,7 @@ fn setup(
     });
 
     for part in &parts {
-        handles.load_part(&source_map, &part.id, &mut meshes, &mut lines);
+        handles.load_part(&source_map, &color_map, part, &mut meshes, &mut lines);
         handles.load_material(&color_map, part.color, &mut materials);
         handles.spawn_part(
             &mut commands,
@@ -132,20 +132,21 @@ impl Handles {
     fn load_part(
         &mut self,
         source_map: &SourceMap,
-        part_id: &str,
+        color_map: &ColorMap,
+        part: &Part,
         meshes: &mut Assets<Mesh>,
         lines: &mut Assets<Polyline>,
     ) {
-        if self.part.contains_key(part_id) {
+        if self.part.contains_key(&part.id) {
             return;
         }
 
-        let primitives = Primitives::of_part(&source_map, &part_id);
+        let primitives = Primitives::of_part(&source_map, &part.id);
 
         self.part.insert(
-            part_id.to_owned(),
+            part.id.clone(),
             PartHandles {
-                mesh: meshes.add(primitives.build_mesh()),
+                mesh: meshes.add(primitives.build_mesh(&color_map, part.color)),
                 line: lines.add(primitives.build_lines()),
                 opt_line: lines.add(primitives.build_opt_lines()),
             },
@@ -166,6 +167,8 @@ impl Handles {
         let rgb = ldraw_color.value;
         let alpha = ldraw_color.alpha.unwrap_or(0xFF);
         let [r, g, b, a] = [rgb.red, rgb.green, rgb.blue, alpha].map(|n| n as f32 / 255.0);
+        // TODO: Any per-polygon colors are multiplied by the base color,
+        // but we want "overwrite" behavior, which will require a custom material.
         let color = Color::srgba(r, g, b, a);
         self.material.insert(part_color, materials.add(color));
     }
@@ -254,6 +257,7 @@ fn bevy_from_weldr_mat(a: weldr::Mat4) -> bevy::prelude::Mat4 {
 #[derive(Default)]
 struct Primitives {
     triangles: Vec<Triangle3d>,
+    triangle_colors: HashMap<usize, ColorCode>,
     lines: Vec<[Vec3; 2]>,
     opt_lines: Vec<([Vec3; 2], [Vec3; 2])>,
 }
@@ -267,11 +271,12 @@ impl Primitives {
         primitives
     }
 
-    fn build_mesh(&self) -> Mesh {
+    fn build_mesh(&self, color_map: &ColorMap, main_color: ColorCode) -> Mesh {
         let mut positions = Vec::<Vec3>::new();
         let mut normals = Vec::<Vec3>::new();
+        let mut colors = Vec::<Vec4>::new();
         let mut indices = Indices::U16(vec![]);
-        let mut dedup = HashMap::<[u32; 6], u32>::new();
+        let mut dedup = HashMap::<([u32; 3], [u32; 3], u32), u32>::new();
 
         // We want to use indexed vertices for memory efficiency,
         // but we also (usually?) want flat normals,
@@ -279,14 +284,26 @@ impl Primitives {
         // and duplicate the vertex for each face it belongs to
         // TODO: Identify cases where we do want smooth normals
 
-        for triangle in &self.triangles {
+        for (triangle_index, triangle) in self.triangles.iter().enumerate() {
+            let color_code = *self
+                .triangle_colors
+                .get(&triangle_index)
+                .unwrap_or(&main_color);
+
+            let c = color_map.by_code(color_code).value;
+            let color = Color::srgb_u8(c.red, c.green, c.blue).to_srgba().to_vec4();
+
             let normal = triangle.normal().unwrap_or(Dir3::X).as_vec3();
             for vertex in triangle.vertices {
-                let key = bytemuck::cast([vertex, normal]);
+                let key = (bytemuck::cast(vertex), bytemuck::cast(normal), color_code);
+
                 let index = *dedup.entry(key).or_insert_with(|| {
                     let i = positions.len() as u32;
                     positions.push(vertex);
                     normals.push(normal);
+                    if !self.triangle_colors.is_empty() {
+                        colors.push(color);
+                    }
                     i
                 });
 
@@ -294,13 +311,17 @@ impl Primitives {
             }
         }
 
-        Mesh::new(
+        let mut mesh = Mesh::new(
             PrimitiveTopology::TriangleList,
             RenderAssetUsages::default(),
-        )
-        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
-        .with_inserted_indices(indices)
+        );
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+        if !self.triangle_colors.is_empty() {
+            mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
+        }
+        mesh.insert_indices(indices);
+        mesh
     }
 
     fn build_lines(&self) -> Polyline {
@@ -344,13 +365,19 @@ fn traverse_part(
             current_winding
         };
 
-        let mut push_triangle = |vertices| {
-            // TODO: color of individual polygons
+        let mut push_triangle = |vertices, color| {
+            let color = new_color(ctx.color, color);
+
             let vertices = ctx.project(vertices).map(bevy_from_weldr);
             let mut tri = Triangle3d { vertices };
             if effective_winding != Winding::Ccw {
                 tri.reverse();
             }
+
+            if color != CURRENT_COLOR {
+                output.triangle_colors.insert(output.triangles.len(), color);
+            }
+
             output.triangles.push(tri);
         };
 
@@ -382,13 +409,13 @@ fn traverse_part(
             }
             Command::Triangle(t) => {
                 assert!(!invert_next);
-                push_triangle(t.vertices);
+                push_triangle(t.vertices, t.color);
             }
             Command::Quad(q) => {
                 assert!(!invert_next);
                 let [a, b, c, d] = q.vertices;
-                push_triangle([a, b, c]);
-                push_triangle([c, d, a]);
+                push_triangle([a, b, c], q.color);
+                push_triangle([c, d, a], q.color);
             }
             _ => {}
         }

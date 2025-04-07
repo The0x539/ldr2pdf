@@ -40,7 +40,7 @@ pub fn traverse(
 
 pub type ColorCode = u32;
 // Special color code that "inherits" the existing color.
-const CURRENT_COLOR: ColorCode = 16;
+pub const CURRENT_COLOR: ColorCode = 16;
 
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub enum Winding {
@@ -92,11 +92,7 @@ impl GeometryContext {
 }
 
 pub fn new_color(current: ColorCode, new: ColorCode) -> ColorCode {
-    if new == CURRENT_COLOR {
-        current
-    } else {
-        new
-    }
+    if new == CURRENT_COLOR { current } else { new }
 }
 
 #[derive(Default)]
