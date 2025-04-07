@@ -11,8 +11,6 @@ use bevy::{
     render::mesh::{Indices, PrimitiveTopology},
 };
 
-use crate::bevy_from_weldr;
-
 #[derive(Default)]
 pub struct Primitives {
     triangles: Vec<Triangle3d>,
@@ -120,6 +118,11 @@ fn traverse_part(
 
     let mut invert_next = false;
 
+    fn project<const N: usize>(ctx: &GeometryContext, vertices: [weldr::Vec3; N]) -> [Vec3; N] {
+        ctx.project(vertices)
+            .map(|v| Vec3::from_array(v.to_array()))
+    }
+
     for cmd in &model.cmds {
         let effective_winding = if current_inverted {
             !current_winding
@@ -129,8 +132,7 @@ fn traverse_part(
 
         let mut push_triangle = |vertices, color| {
             let color = new_color(ctx.color, color);
-
-            let vertices = ctx.project(vertices).map(bevy_from_weldr);
+            let vertices = project(&ctx, vertices);
             let mut tri = Triangle3d { vertices };
             if effective_winding != Winding::Ccw {
                 tri.reverse();
@@ -160,14 +162,11 @@ fn traverse_part(
                 traverse_part(source_map, &sfrc.file, child, output);
                 invert_next = false;
             }
-            Command::Line(l) => output
-                .lines
-                .push(ctx.project(l.vertices).map(bevy_from_weldr)),
-
+            Command::Line(l) => output.lines.push(project(&ctx, l.vertices)),
             Command::OptLine(l) => {
-                let [vertices, control_points] =
-                    [l.vertices, l.control_points].map(|x| ctx.project(x).map(bevy_from_weldr));
-                output.opt_lines.push((vertices, control_points));
+                output
+                    .opt_lines
+                    .push((project(&ctx, l.vertices), project(&ctx, l.control_points)));
             }
             Command::Triangle(t) => {
                 assert!(!invert_next);

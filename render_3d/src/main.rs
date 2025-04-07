@@ -41,11 +41,3 @@ fn main() {
         .add_systems(Startup, setup::setup)
         .run();
 }
-
-fn bevy_from_weldr(a: weldr::Vec3) -> bevy::prelude::Vec3 {
-    bevy::prelude::Vec3::from_array(a.to_array())
-}
-
-fn bevy_from_weldr_mat(a: weldr::Mat4) -> bevy::prelude::Mat4 {
-    bevy::prelude::Mat4::from_cols_array(&a.to_cols_array())
-}

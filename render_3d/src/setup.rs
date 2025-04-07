@@ -7,9 +7,8 @@ use ldr2pdf_common::{
 use std::collections::HashMap;
 use weldr::{Command, SourceMap};
 
-use bevy::{pbr::ExtendedMaterial, prelude::*, render::camera::Exposure};
+use bevy::{prelude::*, render::camera::Exposure};
 
-use crate::{bevy_from_weldr_mat, material::MyExtension};
 use crate::{material::MyMaterial, primitives::Primitives};
 
 pub fn setup(
@@ -136,9 +135,9 @@ impl Handles {
         let rgb = ldraw_color.value;
         let alpha = ldraw_color.alpha.unwrap_or(0xFF);
         let [r, g, b, a] = [rgb.red, rgb.green, rgb.blue, alpha].map(|n| n as f32 / 255.0);
-        let material = ExtendedMaterial {
+        let material = MyMaterial {
             base: StandardMaterial::from_color(Color::srgba(r, g, b, a)),
-            extension: MyExtension {},
+            extension: Default::default(),
         };
         self.material.insert(part_color, materials.add(material));
     }
@@ -200,9 +199,8 @@ fn traverse_design(
                 if sfrc.file.ends_with(".dat") {
                     let part = Part {
                         id: sfrc.file.clone(),
-                        // TODO: respect currentcolor
                         color: new_color(child_ctx.color, sfrc.color),
-                        transform: bevy_from_weldr_mat(child_ctx.transform),
+                        transform: Mat4::from_cols_array(&child_ctx.transform.to_cols_array()),
                     };
                     output.push(part);
                 } else {
