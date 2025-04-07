@@ -2868,6 +2868,7 @@ dependencies = [
  "bevy",
  "bevy_flycam",
  "bevy_lines",
+ "bytemuck",
  "dirs",
  "glam 0.23.0",
  "iyes_perf_ui",

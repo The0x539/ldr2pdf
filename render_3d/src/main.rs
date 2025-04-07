@@ -5,6 +5,7 @@ use ldr2pdf_common::{
     ldr::{ColorCode, ColorMap, GeometryContext, Winding, new_color},
     resolver::Resolver,
 };
+use std::collections::HashMap;
 use weldr::{Command, SourceMap};
 
 use bevy::{
@@ -15,10 +16,9 @@ use bevy::{
         RenderPlugin,
         camera::Exposure,
         diagnostic::RenderDiagnosticsPlugin,
-        mesh::PrimitiveTopology,
+        mesh::{Indices, PrimitiveTopology},
         settings::{Backends, RenderCreation, WgpuSettings},
     },
-    utils::HashMap,
 };
 
 fn main() {
@@ -141,21 +141,7 @@ impl Handles {
         }
 
         let primitives = build_part_mesh(&source_map, &part_id);
-
-        let mesh = Mesh::new(
-            PrimitiveTopology::TriangleList,
-            RenderAssetUsages::default(),
-        )
-        .with_inserted_attribute(
-            Mesh::ATTRIBUTE_POSITION,
-            primitives
-                .triangles
-                .iter()
-                .flatten()
-                .map(Vec3::to_array)
-                .collect::<Vec<_>>(),
-        )
-        .with_computed_normals();
+        let mesh = make_mesh(&primitives.triangles);
 
         let line = Polyline {
             vertices: primitives.lines.into_iter().flatten().collect(),
@@ -227,6 +213,42 @@ impl Handles {
     }
 }
 
+fn make_mesh(triangles: &[Triangle3d]) -> Mesh {
+    let mut positions = Vec::<Vec3>::new();
+    let mut normals = Vec::<Vec3>::new();
+    let mut indices = Indices::U16(vec![]);
+    let mut dedup = HashMap::<[u32; 6], u32>::new();
+
+    // We want to use indexed vertices for memory efficiency,
+    // but we also (usually?) want flat normals,
+    // so we need to compute flat normals ourselves
+    // and duplicate the vertex for each face it belongs to
+    // TODO: Identify cases where we do want smooth normals
+
+    for triangle in triangles {
+        let normal = triangle.normal().unwrap_or(Dir3::X).as_vec3();
+        for vertex in triangle.vertices {
+            let key = bytemuck::cast([vertex, normal]);
+            let index = *dedup.entry(key).or_insert_with(|| {
+                let i = positions.len() as u32;
+                positions.push(vertex);
+                normals.push(normal);
+                i
+            });
+
+            indices.push(index);
+        }
+    }
+
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_indices(indices)
+}
+
 struct Part {
     id: String,
     color: ColorCode,
@@ -277,7 +299,7 @@ fn bevy_from_weldr_mat(a: weldr::Mat4) -> bevy::prelude::Mat4 {
 
 #[derive(Default)]
 struct Primitives {
-    triangles: Vec<[Vec3; 3]>,
+    triangles: Vec<Triangle3d>,
     lines: Vec<[Vec3; 2]>,
     opt_lines: Vec<([Vec3; 2], [Vec3; 2])>,
 }
@@ -316,6 +338,15 @@ fn traverse_part(
             current_winding
         };
 
+        let mut push_triangle = |vertices| {
+            // TODO: color of individual polygons
+            let mut tri = Triangle3d { vertices };
+            if effective_winding != Winding::Ccw {
+                tri.reverse();
+            }
+            output.triangles.push(tri);
+        };
+
         match cmd {
             Command::Comment(c) => {
                 if c.text.starts_with("BFC CERTIFY") {
@@ -344,26 +375,13 @@ fn traverse_part(
             }
             Command::Triangle(t) => {
                 assert!(!invert_next);
-
-                // TODO: color of individual polygons
-                let [a, b, c] = ctx.project(t.vertices).map(bevy_from_weldr);
-                let to_push = if effective_winding == Winding::Ccw {
-                    [a, b, c]
-                } else {
-                    [c, b, a]
-                };
-                output.triangles.push(to_push);
+                push_triangle(ctx.project(t.vertices).map(bevy_from_weldr));
             }
             Command::Quad(q) => {
                 assert!(!invert_next);
-
                 let [a, b, c, d] = ctx.project(q.vertices).map(bevy_from_weldr);
-                let to_push = if effective_winding == Winding::Ccw {
-                    [[a, b, c], [c, d, a]]
-                } else {
-                    [[c, b, a], [a, d, c]]
-                };
-                output.triangles.extend(to_push);
+                push_triangle([a, b, c]);
+                push_triangle([c, d, a]);
             }
             _ => {}
         }
