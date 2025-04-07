@@ -12,7 +12,9 @@ use bevy::{
     },
 };
 
+mod material;
 mod primitives;
+mod setup;
 
 fn main() {
     App::new()
@@ -30,6 +32,7 @@ fn main() {
             EntityCountDiagnosticsPlugin,
             RenderDiagnosticsPlugin,
             PerfUiPlugin,
+            MaterialPlugin::<material::MyMaterial>::default(),
         ))
         .insert_resource(bevy_flycam::MovementSettings {
             sensitivity: 0.00012,
@@ -38,8 +41,6 @@ fn main() {
         .add_systems(Startup, setup::setup)
         .run();
 }
-
-mod setup;
 
 fn bevy_from_weldr(a: weldr::Vec3) -> bevy::prelude::Vec3 {
     bevy::prelude::Vec3::from_array(a.to_array())

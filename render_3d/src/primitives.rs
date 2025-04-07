@@ -30,7 +30,7 @@ impl Primitives {
         primitives
     }
 
-    pub fn build_mesh(&self, color_map: &ColorMap, main_color: ColorCode) -> Mesh {
+    pub fn build_mesh(&self, color_map: &ColorMap) -> Mesh {
         let mut positions = Vec::<Vec3>::new();
         let mut normals = Vec::<Vec3>::new();
         let mut colors = Vec::<Vec4>::new();
@@ -47,10 +47,13 @@ impl Primitives {
             let color_code = *self
                 .triangle_colors
                 .get(&triangle_index)
-                .unwrap_or(&main_color);
+                .unwrap_or(&CURRENT_COLOR);
 
-            let c = color_map.by_code(color_code).value;
-            let color = Color::srgb_u8(c.red, c.green, c.blue).to_srgba().to_vec4();
+            let mut color = Vec4::ZERO;
+            if color_code != CURRENT_COLOR {
+                let c = color_map.by_code(color_code).value;
+                color = Color::srgb_u8(c.red, c.green, c.blue).to_srgba().to_vec4();
+            }
 
             let normal = triangle.normal().unwrap_or(Dir3::X).as_vec3();
             for vertex in triangle.vertices {

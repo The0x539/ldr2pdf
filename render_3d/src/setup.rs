@@ -7,24 +7,27 @@ use ldr2pdf_common::{
 use std::collections::HashMap;
 use weldr::{Command, SourceMap};
 
-use bevy::{prelude::*, render::camera::Exposure};
+use bevy::{pbr::ExtendedMaterial, prelude::*, render::camera::Exposure};
 
-use crate::bevy_from_weldr_mat;
-use crate::primitives::Primitives;
+use crate::{bevy_from_weldr_mat, material::MyExtension};
+use crate::{material::MyMaterial, primitives::Primitives};
 
 pub fn setup(
     mut commands: Commands,
     mut ambient_light: ResMut<AmbientLight>,
 
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<MyMaterial>>,
 
     mut lines: ResMut<Assets<Polyline>>,
     mut line_materials: ResMut<Assets<PolylineMaterial>>,
 ) {
-    let resolver = Resolver::new(dirs::document_dir().unwrap().join("lego/aria/HQ.io")).unwrap();
+    let path = dirs::document_dir().unwrap().join("lego/aria/HQ.io");
+    let file = path.file_name().unwrap();
+
+    let resolver = Resolver::new(&path).unwrap();
     let mut source_map = SourceMap::new();
-    let main_model_name = weldr::parse("HQ.io", &resolver, &mut source_map).unwrap();
+    let main_model_name = weldr::parse(&file, &resolver, &mut source_map).unwrap();
 
     let color_map = ColorMap::load("C:/Program Files/Studio 2.0/ldraw/LDConfig.ldr").unwrap();
 
@@ -84,7 +87,7 @@ pub fn setup(
 #[derive(Default)]
 struct Handles {
     part: HashMap<String, PartHandles>,
-    material: HashMap<ColorCode, Handle<StandardMaterial>>,
+    material: HashMap<ColorCode, Handle<MyMaterial>>,
 }
 
 #[derive(Clone)]
@@ -112,7 +115,7 @@ impl Handles {
         self.part.insert(
             part.id.clone(),
             PartHandles {
-                mesh: meshes.add(primitives.build_mesh(&color_map, part.color)),
+                mesh: meshes.add(primitives.build_mesh(&color_map)),
                 line: lines.add(primitives.build_lines()),
                 opt_line: lines.add(primitives.build_opt_lines()),
             },
@@ -123,7 +126,7 @@ impl Handles {
         &mut self,
         color_map: &ColorMap,
         part_color: ColorCode,
-        materials: &mut Assets<StandardMaterial>,
+        materials: &mut Assets<MyMaterial>,
     ) {
         if self.material.contains_key(&part_color) {
             return;
@@ -133,10 +136,11 @@ impl Handles {
         let rgb = ldraw_color.value;
         let alpha = ldraw_color.alpha.unwrap_or(0xFF);
         let [r, g, b, a] = [rgb.red, rgb.green, rgb.blue, alpha].map(|n| n as f32 / 255.0);
-        // TODO: Any per-polygon colors are multiplied by the base color,
-        // but we want "overwrite" behavior, which will require a custom material.
-        let color = Color::srgba(r, g, b, a);
-        self.material.insert(part_color, materials.add(color));
+        let material = ExtendedMaterial {
+            base: StandardMaterial::from_color(Color::srgba(r, g, b, a)),
+            extension: MyExtension {},
+        };
+        self.material.insert(part_color, materials.add(material));
     }
 
     fn spawn_part(
