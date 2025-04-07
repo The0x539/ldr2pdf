@@ -140,24 +140,14 @@ impl Handles {
             return;
         }
 
-        let primitives = build_part_mesh(&source_map, &part_id);
-        let mesh = make_mesh(&primitives.triangles);
-
-        let line = Polyline {
-            vertices: primitives.lines.into_iter().flatten().collect(),
-            control_vertices: None,
-        };
-        let opt_line = Polyline {
-            vertices: primitives.opt_lines.iter().flat_map(|v| v.0).collect(),
-            control_vertices: Some(primitives.opt_lines.iter().flat_map(|v| v.1).collect()),
-        };
+        let primitives = Primitives::of_part(&source_map, &part_id);
 
         self.part.insert(
             part_id.to_owned(),
             PartHandles {
-                mesh: meshes.add(mesh),
-                line: lines.add(line),
-                opt_line: lines.add(opt_line),
+                mesh: meshes.add(primitives.build_mesh()),
+                line: lines.add(primitives.build_lines()),
+                opt_line: lines.add(primitives.build_opt_lines()),
             },
         );
     }
@@ -211,42 +201,6 @@ impl Handles {
                 });
             });
     }
-}
-
-fn make_mesh(triangles: &[Triangle3d]) -> Mesh {
-    let mut positions = Vec::<Vec3>::new();
-    let mut normals = Vec::<Vec3>::new();
-    let mut indices = Indices::U16(vec![]);
-    let mut dedup = HashMap::<[u32; 6], u32>::new();
-
-    // We want to use indexed vertices for memory efficiency,
-    // but we also (usually?) want flat normals,
-    // so we need to compute flat normals ourselves
-    // and duplicate the vertex for each face it belongs to
-    // TODO: Identify cases where we do want smooth normals
-
-    for triangle in triangles {
-        let normal = triangle.normal().unwrap_or(Dir3::X).as_vec3();
-        for vertex in triangle.vertices {
-            let key = bytemuck::cast([vertex, normal]);
-            let index = *dedup.entry(key).or_insert_with(|| {
-                let i = positions.len() as u32;
-                positions.push(vertex);
-                normals.push(normal);
-                i
-            });
-
-            indices.push(index);
-        }
-    }
-
-    Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::default(),
-    )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
-    .with_inserted_indices(indices)
 }
 
 struct Part {
@@ -304,12 +258,64 @@ struct Primitives {
     opt_lines: Vec<([Vec3; 2], [Vec3; 2])>,
 }
 
-fn build_part_mesh(source_map: &SourceMap, model_name: &str) -> Primitives {
-    let mut primitives = Primitives::default();
-    let mut ctx = GeometryContext::new();
-    ctx.transform = weldr::Mat4::IDENTITY;
-    traverse_part(source_map, model_name, ctx, &mut primitives);
-    primitives
+impl Primitives {
+    fn of_part(source_map: &SourceMap, model_name: &str) -> Self {
+        let mut primitives = Self::default();
+        let mut ctx = GeometryContext::new();
+        ctx.transform = weldr::Mat4::IDENTITY;
+        traverse_part(source_map, model_name, ctx, &mut primitives);
+        primitives
+    }
+
+    fn build_mesh(&self) -> Mesh {
+        let mut positions = Vec::<Vec3>::new();
+        let mut normals = Vec::<Vec3>::new();
+        let mut indices = Indices::U16(vec![]);
+        let mut dedup = HashMap::<[u32; 6], u32>::new();
+
+        // We want to use indexed vertices for memory efficiency,
+        // but we also (usually?) want flat normals,
+        // so we need to compute flat normals ourselves
+        // and duplicate the vertex for each face it belongs to
+        // TODO: Identify cases where we do want smooth normals
+
+        for triangle in &self.triangles {
+            let normal = triangle.normal().unwrap_or(Dir3::X).as_vec3();
+            for vertex in triangle.vertices {
+                let key = bytemuck::cast([vertex, normal]);
+                let index = *dedup.entry(key).or_insert_with(|| {
+                    let i = positions.len() as u32;
+                    positions.push(vertex);
+                    normals.push(normal);
+                    i
+                });
+
+                indices.push(index);
+            }
+        }
+
+        Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        )
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+        .with_inserted_indices(indices)
+    }
+
+    fn build_lines(&self) -> Polyline {
+        Polyline {
+            vertices: self.lines.iter().copied().flatten().collect(),
+            control_vertices: None,
+        }
+    }
+
+    fn build_opt_lines(&self) -> Polyline {
+        Polyline {
+            vertices: self.opt_lines.iter().flat_map(|v| v.0).collect(),
+            control_vertices: Some(self.opt_lines.iter().flat_map(|v| v.1).collect()),
+        }
+    }
 }
 
 fn traverse_part(
@@ -340,6 +346,7 @@ fn traverse_part(
 
         let mut push_triangle = |vertices| {
             // TODO: color of individual polygons
+            let vertices = ctx.project(vertices).map(bevy_from_weldr);
             let mut tri = Triangle3d { vertices };
             if effective_winding != Winding::Ccw {
                 tri.reverse();
@@ -375,11 +382,11 @@ fn traverse_part(
             }
             Command::Triangle(t) => {
                 assert!(!invert_next);
-                push_triangle(ctx.project(t.vertices).map(bevy_from_weldr));
+                push_triangle(t.vertices);
             }
             Command::Quad(q) => {
                 assert!(!invert_next);
-                let [a, b, c, d] = ctx.project(q.vertices).map(bevy_from_weldr);
+                let [a, b, c, d] = q.vertices;
                 push_triangle([a, b, c]);
                 push_triangle([c, d, a]);
             }
