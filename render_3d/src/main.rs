@@ -1,13 +1,10 @@
 use bevy_flycam::NoCameraPlayerPlugin;
 use bevy_lines::prelude::*;
-use iyes_perf_ui::prelude::*;
 
 use bevy::{
-    diagnostic::{EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin},
     prelude::*,
     render::{
         RenderPlugin,
-        diagnostic::RenderDiagnosticsPlugin,
         settings::{Backends, RenderCreation, WgpuSettings},
     },
 };
@@ -28,11 +25,14 @@ fn main() {
             }),
             PolylinePlugin,
             NoCameraPlayerPlugin,
-            FrameTimeDiagnosticsPlugin,
-            EntityCountDiagnosticsPlugin,
-            RenderDiagnosticsPlugin,
-            PerfUiPlugin,
             MaterialPlugin::<material::MyMaterial>::default(),
+            #[cfg(feature = "overlay")]
+            (
+                bevy::diagnostic::FrameTimeDiagnosticsPlugin,
+                bevy::diagnostic::EntityCountDiagnosticsPlugin,
+                bevy::render::diagnostic::RenderDiagnosticsPlugin,
+                iyes_perf_ui::PerfUiPlugin,
+            ),
         ))
         .insert_resource(bevy_flycam::MovementSettings {
             sensitivity: 0.00012,

@@ -1,5 +1,4 @@
 use bevy_lines::prelude::*;
-use iyes_perf_ui::prelude::*;
 use ldr2pdf_common::{
     ldr::{ColorCode, ColorMap, GeometryContext, new_color},
     resolver::Resolver,
@@ -80,7 +79,8 @@ pub fn setup(
         bevy_flycam::FlyCam,
     ));
 
-    commands.spawn(PerfUiAllEntries::default());
+    #[cfg(feature = "overlay")]
+    commands.spawn(iyes_perf_ui::entries::PerfUiAllEntries::default());
 }
 
 #[derive(Default)]
