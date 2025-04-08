@@ -99,11 +99,14 @@ impl Primitives {
         }
     }
 
-    pub fn build_opt_lines(&self) -> Polyline {
-        Polyline {
+    pub fn build_opt_lines(&self) -> Option<Polyline> {
+        if self.opt_lines.is_empty() {
+            return None;
+        }
+        Some(Polyline {
             vertices: self.opt_lines.iter().flat_map(|v| v.0).collect(),
             control_vertices: Some(self.opt_lines.iter().flat_map(|v| v.1).collect()),
-        }
+        })
     }
 }
 

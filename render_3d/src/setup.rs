@@ -93,7 +93,7 @@ struct Handles {
 struct PartHandles {
     mesh: Handle<Mesh>,
     line: Handle<Polyline>,
-    opt_line: Handle<Polyline>,
+    opt_line: Option<Handle<Polyline>>,
 }
 
 impl Handles {
@@ -116,7 +116,7 @@ impl Handles {
             PartHandles {
                 mesh: meshes.add(primitives.build_mesh(&color_map)),
                 line: lines.add(primitives.build_lines()),
-                opt_line: lines.add(primitives.build_opt_lines()),
+                opt_line: primitives.build_opt_lines().map(|l| lines.add(l)),
             },
         );
     }
@@ -166,11 +166,13 @@ impl Handles {
                     ..default()
                 });
 
-                parent.spawn(PolylineBundle {
-                    polyline: PolylineHandle(ph.opt_line),
-                    material: opt_line_material.clone(),
-                    ..default()
-                });
+                if let Some(opt_line) = ph.opt_line {
+                    parent.spawn(PolylineBundle {
+                        polyline: PolylineHandle(opt_line),
+                        material: opt_line_material.clone(),
+                        ..default()
+                    });
+                }
             });
     }
 }
