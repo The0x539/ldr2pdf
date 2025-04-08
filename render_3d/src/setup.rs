@@ -1,4 +1,5 @@
 use bevy_lines::prelude::*;
+use bevy_mod_outline::*;
 use ldr2pdf_common::{
     ldr::{ColorCode, ColorMap, GeometryContext, new_color},
     resolver::Resolver,
@@ -69,16 +70,15 @@ pub fn setup(
         .spawn((
             Transform::from_matrix(base_transform),
             InheritedVisibility::VISIBLE,
+            OutlineVolume {
+                visible: true,
+                colour: Color::srgb(1.0, 0.0, 0.0),
+                width: 4.0,
+            },
         ))
         .with_children(|root| {
             handles.spawn_model(root, &model, &mut model_assets);
         });
-
-    // for part in &parts {
-    //     handles.load_part(&source_map, &color_map, part, &mut meshes, &mut lines);
-    //     handles.load_material(&color_map, part.color, &mut materials);
-    //     handles.spawn_part(&mut commands, part);
-    // }
 
     commands.spawn((
         PointLight {
@@ -163,7 +163,7 @@ impl Handles {
         let transform = Transform::from_matrix(part.transform);
 
         parent
-            .spawn((Mesh3d(ph.mesh), material.clone(), transform))
+            .spawn((Mesh3d(ph.mesh), material.clone(), transform, InheritOutline))
             .with_children(|c| {
                 c.spawn(PolylineBundle {
                     polyline: PolylineHandle(ph.line),
@@ -199,6 +199,7 @@ impl Handles {
                         let bundle = (
                             Transform::from_matrix(submodel.transform),
                             InheritedVisibility::VISIBLE,
+                            InheritOutline,
                         );
                         parent.spawn(bundle).with_children(|subparent| {
                             self.spawn_model(subparent, submodel, assets)

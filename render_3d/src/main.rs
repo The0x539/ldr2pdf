@@ -8,6 +8,7 @@ use bevy::{
         settings::{Backends, RenderCreation, WgpuSettings},
     },
 };
+use bevy_mod_outline::{AutoGenerateOutlineNormalsPlugin, OutlinePlugin};
 
 mod material;
 mod primitives;
@@ -37,6 +38,8 @@ fn main() {
                 bevy::render::diagnostic::RenderDiagnosticsPlugin,
                 iyes_perf_ui::PerfUiPlugin,
             ),
+            OutlinePlugin,
+            AutoGenerateOutlineNormalsPlugin::default(),
         ))
         .insert_resource(bevy_flycam::MovementSettings {
             sensitivity: 0.00012,

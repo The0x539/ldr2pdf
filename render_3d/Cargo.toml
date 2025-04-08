@@ -13,6 +13,7 @@ dirs = "6.0.0"
 bevy_flycam = "0.15.0"
 bevy_lines.path = "../bevy_lines"
 bytemuck = "1.22.0"
+bevy_mod_outline = { version = "0.9.1", default-features = false, features = ["flood"] }
 
 iyes_perf_ui = { version = "0.4.0", optional = true }
 
