@@ -6,19 +6,22 @@ use ldr2pdf_common::{
 use std::collections::HashMap;
 use weldr::{Command, SourceMap};
 
-use bevy::{prelude::*, render::camera::Exposure};
+use bevy::{ecs::system::SystemParam, prelude::*, render::camera::Exposure};
 
 use crate::{material::MyMaterial, primitives::Primitives};
+
+#[derive(SystemParam)]
+pub struct ModelAssets<'w> {
+    meshes: ResMut<'w, Assets<Mesh>>,
+    materials: ResMut<'w, Assets<MyMaterial>>,
+    lines: ResMut<'w, Assets<Polyline>>,
+    line_materials: ResMut<'w, Assets<PolylineMaterial>>,
+}
 
 pub fn setup(
     mut commands: Commands,
     mut ambient_light: ResMut<AmbientLight>,
-
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<MyMaterial>>,
-
-    mut lines: ResMut<Assets<Polyline>>,
-    mut line_materials: ResMut<Assets<PolylineMaterial>>,
+    mut model_assets: ModelAssets<'_>,
 ) {
     let path = dirs::document_dir().unwrap().join("lego/aria/HQ.io");
     let file = path.file_name().unwrap();
@@ -33,31 +36,49 @@ pub fn setup(
     ctx.transform = weldr::Mat4::from_rotation_z(std::f32::consts::PI)
         * weldr::Mat4::from_scale(weldr::Vec3::splat(0.05));
 
-    let mut parts = Vec::new();
-    traverse_design(&source_map, &main_model_name, ctx.clone(), &mut parts);
+    let mut model = Model {
+        transform: Mat4::IDENTITY,
+        steps: vec![],
+    };
 
-    let mut handles = Handles::default();
-    let line_material = line_materials.add(PolylineMaterial {
-        width: 3.0,
-        color: Color::BLACK.into(),
-        ..default()
-    });
-    let opt_line_material = line_materials.add(PolylineMaterial {
-        width: 6.0,
-        color: Color::BLACK.into(),
-        ..default()
-    });
+    traverse_design(&source_map, &main_model_name, ctx.clone(), &mut model);
 
-    for part in &parts {
-        handles.load_part(&source_map, &color_map, part, &mut meshes, &mut lines);
-        handles.load_material(&color_map, part.color, &mut materials);
-        handles.spawn_part(
-            &mut commands,
-            part,
-            line_material.clone(),
-            opt_line_material.clone(),
-        );
-    }
+    let mut handles = Handles {
+        part: HashMap::new(),
+        material: HashMap::new(),
+        line_material: PolylineMaterialHandle(model_assets.line_materials.add(PolylineMaterial {
+            width: 3.0,
+            color: Color::BLACK.into(),
+            ..default()
+        })),
+        opt_line_material: PolylineMaterialHandle(model_assets.line_materials.add(
+            PolylineMaterial {
+                width: 6.0,
+                color: Color::BLACK.into(),
+                ..default()
+            },
+        )),
+        source_map,
+        color_map,
+    };
+
+    let base_transform =
+        Mat4::from_rotation_z(std::f32::consts::PI) * Mat4::from_scale(Vec3::splat(0.05));
+
+    commands
+        .spawn((
+            Transform::from_matrix(base_transform),
+            InheritedVisibility::VISIBLE,
+        ))
+        .with_children(|root| {
+            handles.spawn_model(root, &model, &mut model_assets);
+        });
+
+    // for part in &parts {
+    //     handles.load_part(&source_map, &color_map, part, &mut meshes, &mut lines);
+    //     handles.load_material(&color_map, part.color, &mut materials);
+    //     handles.spawn_part(&mut commands, part);
+    // }
 
     commands.spawn((
         PointLight {
@@ -83,10 +104,13 @@ pub fn setup(
     commands.spawn(iyes_perf_ui::entries::PerfUiAllEntries::default());
 }
 
-#[derive(Default)]
 struct Handles {
     part: HashMap<String, PartHandles>,
     material: HashMap<ColorCode, Handle<MyMaterial>>,
+    line_material: PolylineMaterialHandle,
+    opt_line_material: PolylineMaterialHandle,
+    source_map: SourceMap,
+    color_map: ColorMap,
 }
 
 #[derive(Clone)]
@@ -97,41 +121,29 @@ struct PartHandles {
 }
 
 impl Handles {
-    fn load_part(
-        &mut self,
-        source_map: &SourceMap,
-        color_map: &ColorMap,
-        part: &Part,
-        meshes: &mut Assets<Mesh>,
-        lines: &mut Assets<Polyline>,
-    ) {
+    fn load_part(&mut self, part: &Part, assets: &mut ModelAssets) {
         if self.part.contains_key(&part.id) {
             return;
         }
 
-        let primitives = Primitives::of_part(&source_map, &part.id);
+        let primitives = Primitives::of_part(&self.source_map, &part.id);
 
         self.part.insert(
             part.id.clone(),
             PartHandles {
-                mesh: meshes.add(primitives.build_mesh(&color_map)),
-                line: lines.add(primitives.build_lines()),
-                opt_line: primitives.build_opt_lines().map(|l| lines.add(l)),
+                mesh: assets.meshes.add(primitives.build_mesh(&self.color_map)),
+                line: assets.lines.add(primitives.build_lines()),
+                opt_line: primitives.build_opt_lines().map(|l| assets.lines.add(l)),
             },
         );
     }
 
-    fn load_material(
-        &mut self,
-        color_map: &ColorMap,
-        part_color: ColorCode,
-        materials: &mut Assets<MyMaterial>,
-    ) {
+    fn load_material(&mut self, part_color: ColorCode, assets: &mut ModelAssets) {
         if self.material.contains_key(&part_color) {
             return;
         }
 
-        let ldraw_color = color_map.by_code(part_color);
+        let ldraw_color = self.color_map.by_code(part_color);
         let rgb = ldraw_color.value;
         let alpha = ldraw_color.alpha.unwrap_or(0xFF);
         let [r, g, b, a] = [rgb.red, rgb.green, rgb.blue, alpha].map(|n| n as f32 / 255.0);
@@ -139,74 +151,144 @@ impl Handles {
             base: StandardMaterial::from_color(Color::srgba(r, g, b, a)),
             extension: Default::default(),
         };
-        self.material.insert(part_color, materials.add(material));
+        self.material
+            .insert(part_color, assets.materials.add(material));
     }
 
-    fn spawn_part(
-        &self,
-        commands: &mut Commands,
-        part: &Part,
-        line_material: Handle<PolylineMaterial>,
-        opt_line_material: Handle<PolylineMaterial>,
-    ) {
+    fn spawn_part(&self, parent: &mut ChildBuilder<'_>, part: &Part) {
         let ph = self.part[&part.id].clone();
 
         let material = MeshMaterial3d(self.material[&part.color].clone());
-        let line_material = PolylineMaterialHandle(line_material.clone());
-        let opt_line_material = PolylineMaterialHandle(opt_line_material.clone());
 
         let transform = Transform::from_matrix(part.transform);
 
-        commands
+        parent
             .spawn((Mesh3d(ph.mesh), material.clone(), transform))
-            .with_children(|parent| {
-                parent.spawn(PolylineBundle {
+            .with_children(|c| {
+                c.spawn(PolylineBundle {
                     polyline: PolylineHandle(ph.line),
-                    material: line_material.clone(),
+                    material: self.line_material.clone(),
                     ..default()
                 });
 
                 if let Some(opt_line) = ph.opt_line {
-                    parent.spawn(PolylineBundle {
+                    c.spawn(PolylineBundle {
                         polyline: PolylineHandle(opt_line),
-                        material: opt_line_material.clone(),
+                        material: self.opt_line_material.clone(),
                         ..default()
                     });
                 }
             });
     }
+
+    fn spawn_model(
+        &mut self,
+        parent: &mut ChildBuilder<'_>,
+        model: &Model,
+        assets: &mut ModelAssets<'_>,
+    ) {
+        for step in &model.steps {
+            for item in &step.items {
+                match item {
+                    StepItem::Part(part) => {
+                        self.load_part(part, assets);
+                        self.load_material(part.color, assets);
+                        self.spawn_part(parent, part);
+                    }
+                    StepItem::Submodel(submodel) => {
+                        let bundle = (
+                            Transform::from_matrix(submodel.transform),
+                            InheritedVisibility::VISIBLE,
+                        );
+                        parent.spawn(bundle).with_children(|subparent| {
+                            self.spawn_model(subparent, submodel, assets)
+                        });
+                    }
+                }
+            }
+        }
+    }
 }
 
+#[derive(Clone)]
 struct Part {
     id: String,
     color: ColorCode,
-    transform: bevy::prelude::Mat4,
+    transform: Mat4,
+}
+
+struct Model {
+    steps: Vec<Step>,
+    transform: Mat4,
+}
+
+#[derive(Default)]
+struct Step {
+    items: Vec<StepItem>,
+}
+
+impl Model {
+    fn new_step(&mut self) -> &mut Step {
+        self.steps.push(Default::default());
+        self.steps.last_mut().unwrap()
+    }
+}
+
+impl Step {
+    fn add_part(&mut self, part: Part) {
+        self.items.push(StepItem::Part(part))
+    }
+
+    fn new_submodel(&mut self, transform: Mat4) -> &mut Model {
+        self.items.push(StepItem::Submodel(Model {
+            transform,
+            steps: vec![],
+        }));
+        match self.items.last_mut() {
+            Some(StepItem::Submodel(m)) => m,
+            _ => unreachable!(),
+        }
+    }
+}
+
+enum StepItem {
+    Part(Part),
+    Submodel(Model),
 }
 
 fn traverse_design(
     source_map: &SourceMap,
     model_name: &str,
     ctx: GeometryContext,
-    output: &mut Vec<Part>,
+    output: &mut Model,
 ) {
     let Some(model) = source_map.get(model_name) else {
         panic!("{model_name}");
     };
 
+    let mut step = output.new_step();
+
     for cmd in &model.cmds {
         match cmd {
-            Command::Comment(..) => {}
+            Command::Comment(c) => {
+                if c.text == "STEP" {
+                    step = output.new_step();
+                }
+            }
             Command::SubFileRef(sfrc) => {
+                let transform = Mat4::from_cols_array(&sfrc.matrix().to_cols_array());
+
                 let child_ctx = ctx.child(sfrc, false);
                 if sfrc.file.ends_with(".dat") {
                     let part = Part {
                         id: sfrc.file.clone(),
                         color: new_color(child_ctx.color, sfrc.color),
-                        transform: Mat4::from_cols_array(&child_ctx.transform.to_cols_array()),
+                        transform,
                     };
-                    output.push(part);
+                    step.add_part(part);
                 } else {
-                    traverse_design(source_map, &sfrc.file, child_ctx, output);
+                    let submodel = step.new_submodel(transform);
+                    traverse_design(source_map, &sfrc.file, child_ctx, submodel);
                 }
             }
             Command::Line(_) | Command::OptLine(_) => panic!("line in {model_name}"),
