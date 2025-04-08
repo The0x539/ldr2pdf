@@ -10,3 +10,4 @@ zip.workspace = true
 
 slab = "0.4.9"
 dirs = "6.0.0"
+imbl = "5.0.0"

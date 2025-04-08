@@ -28,5 +28,5 @@ features = [
 ]
 
 [features]
-# default = ["overlay"]
+default = ["overlay"]
 overlay = ["dep:iyes_perf_ui", "bevy/default_font"]

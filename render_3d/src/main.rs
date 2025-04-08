@@ -25,7 +25,11 @@ fn main() {
             }),
             PolylinePlugin,
             NoCameraPlayerPlugin,
-            MaterialPlugin::<material::MyMaterial>::default(),
+            MaterialPlugin::<material::MyMaterial> {
+                prepass_enabled: false,
+                shadows_enabled: false,
+                ..default()
+            },
             #[cfg(feature = "overlay")]
             (
                 bevy::diagnostic::FrameTimeDiagnosticsPlugin,

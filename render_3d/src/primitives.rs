@@ -2,7 +2,7 @@ use bevy_lines::prelude::*;
 use ldr2pdf_common::ldr::{
     CURRENT_COLOR, ColorCode, ColorMap, GeometryContext, Winding, new_color,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use weldr::{Command, SourceMap};
 
 use bevy::{
@@ -11,10 +11,13 @@ use bevy::{
     render::mesh::{Indices, PrimitiveTopology},
 };
 
+use crate::material::ATTRIBUTE_FLAGS;
+
 #[derive(Default)]
 pub struct Primitives {
-    triangles: Vec<Triangle3d>,
-    triangle_colors: HashMap<usize, ColorCode>,
+    faces: Vec<Triangle3d>,
+    face_colors: HashMap<usize, ColorCode>,
+    contrast_faces: HashSet<usize>,
     lines: Vec<[Vec3; 2]>,
     opt_lines: Vec<([Vec3; 2], [Vec3; 2])>,
 }
@@ -33,6 +36,7 @@ impl Primitives {
         let mut normals = Vec::<Vec3>::new();
         let mut colors = Vec::<Vec4>::new();
         let mut indices = Indices::U16(vec![]);
+        let mut flags = Vec::<u32>::new();
         let mut dedup = HashMap::<([u32; 3], [u32; 3], u32), u32>::new();
 
         // We want to use indexed vertices for memory efficiency,
@@ -41,9 +45,9 @@ impl Primitives {
         // and duplicate the vertex for each face it belongs to
         // TODO: Identify cases where we do want smooth normals
 
-        for (triangle_index, triangle) in self.triangles.iter().enumerate() {
+        for (triangle_index, triangle) in self.faces.iter().enumerate() {
             let color_code = *self
-                .triangle_colors
+                .face_colors
                 .get(&triangle_index)
                 .unwrap_or(&CURRENT_COLOR);
 
@@ -53,6 +57,8 @@ impl Primitives {
                 color = Color::srgb_u8(c.red, c.green, c.blue).to_srgba().to_vec4();
             }
 
+            let is_contrast = self.contrast_faces.contains(&triangle_index);
+
             let normal = triangle.normal().unwrap_or(Dir3::X).as_vec3();
             for vertex in triangle.vertices {
                 let key = (bytemuck::cast(vertex), bytemuck::cast(normal), color_code);
@@ -61,7 +67,8 @@ impl Primitives {
                     let i = positions.len() as u32;
                     positions.push(vertex);
                     normals.push(normal);
-                    if !self.triangle_colors.is_empty() {
+                    flags.push(is_contrast as u32);
+                    if !self.face_colors.is_empty() {
                         colors.push(color);
                     }
                     i
@@ -77,9 +84,10 @@ impl Primitives {
         );
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
         mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-        if !self.triangle_colors.is_empty() {
+        if !self.face_colors.is_empty() {
             mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
         }
+        mesh.insert_attribute(ATTRIBUTE_FLAGS, flags);
         mesh.insert_indices(indices);
         mesh
     }
@@ -123,6 +131,26 @@ fn traverse_part(
             .map(|v| Vec3::from_array(v.to_array()))
     }
 
+    fn is_stud_name(name: &str) -> bool {
+        [
+            "stud.dat",
+            "studa.dat",
+            "stud26.dat",
+            "stud2.dat",
+            "stud2a.dat",
+            "stud3.dat",
+            "stud3a.dat",
+            "stud4.dat",
+            "stud4a.dat",
+        ]
+        .iter()
+        .any(|x| name.ends_with(x))
+    }
+
+    // Are we the cylindrical part of a stud, to be drawn with high contrast?
+    let contrast = ctx.names.get(0).is_some_and(|n| n.ends_with("4-4cyli.dat"))
+        && ctx.names.get(1).is_some_and(|n| is_stud_name(n));
+
     for cmd in &model.cmds {
         let effective_winding = if current_inverted {
             !current_winding
@@ -139,10 +167,13 @@ fn traverse_part(
             }
 
             if color != CURRENT_COLOR {
-                output.triangle_colors.insert(output.triangles.len(), color);
+                output.face_colors.insert(output.faces.len(), color);
+            }
+            if contrast {
+                output.contrast_faces.insert(output.faces.len());
             }
 
-            output.triangles.push(tri);
+            output.faces.push(tri);
         };
 
         match cmd {
@@ -163,7 +194,7 @@ fn traverse_part(
                 invert_next = false;
             }
             Command::Line(l) => output.lines.push(project(&ctx, l.vertices)),
-            Command::OptLine(l) => {
+            Command::OptLine(l) if !contrast => {
                 output
                     .opt_lines
                     .push((project(&ctx, l.vertices), project(&ctx, l.control_points)));

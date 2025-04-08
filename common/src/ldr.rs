@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{Point, Poly, Primitive};
+use imbl::Vector;
 use slab::Slab;
 use weldr::{ColourCmd, Command, Mat4, SourceMap, Vec3};
 
@@ -60,13 +61,14 @@ impl std::ops::Not for Winding {
 }
 
 #[derive(Clone)]
-pub struct GeometryContext {
+pub struct GeometryContext<'a> {
     pub transform: Mat4,
     pub color: ColorCode,
     pub inverted: bool,
+    pub names: Vector<&'a str>,
 }
 
-impl GeometryContext {
+impl<'a> GeometryContext<'a> {
     pub fn new() -> Self {
         let alpha = 30.0_f32.to_radians().tan().asin();
         let beta = 45.0_f32.to_radians();
@@ -75,14 +77,18 @@ impl GeometryContext {
             transform,
             color: CURRENT_COLOR,
             inverted: false,
+            names: Vector::new(),
         }
     }
 
-    pub fn child(&self, subfile: &weldr::SubFileRefCmd, invert: bool) -> Self {
+    pub fn child(&self, subfile: &'a weldr::SubFileRefCmd, invert: bool) -> Self {
+        let mut names = self.names.clone();
+        names.push_front(&subfile.file);
         Self {
             transform: self.transform * subfile.matrix(),
             color: new_color(self.color, subfile.color),
             inverted: invert ^ self.inverted,
+            names,
         }
     }
 
@@ -118,9 +124,9 @@ impl ColorMap {
         Ok(map)
     }
 
-    // pub fn by_name(&self, name: &str) -> &ColourCmd {
-    //     &self.values[self.names[name]]
-    // }
+    pub fn by_name(&self, name: &str) -> &ColourCmd {
+        &self.values[self.names[name]]
+    }
 
     pub fn by_code(&self, code: ColorCode) -> &ColourCmd {
         &self.values[*self.codes.get(&code).unwrap_or(&0)]
