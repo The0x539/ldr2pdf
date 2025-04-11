@@ -38,6 +38,7 @@ pub fn setup(
         * weldr::Mat4::from_scale(weldr::Vec3::splat(0.05));
 
     let mut model = Model {
+        name: file.to_string_lossy().into_owned(),
         transform: Mat4::IDENTITY,
         steps: vec![],
     };
@@ -219,6 +220,8 @@ struct Part {
 }
 
 struct Model {
+    #[allow(dead_code)]
+    name: String,
     steps: Vec<Step>,
     transform: Mat4,
 }
@@ -240,8 +243,9 @@ impl Step {
         self.items.push(StepItem::Part(part))
     }
 
-    fn new_submodel(&mut self, transform: Mat4) -> &mut Model {
+    fn new_submodel(&mut self, name: String, transform: Mat4) -> &mut Model {
         self.items.push(StepItem::Submodel(Model {
+            name,
             transform,
             steps: vec![],
         }));
@@ -288,7 +292,7 @@ fn traverse_design(
                     };
                     step.add_part(part);
                 } else {
-                    let submodel = step.new_submodel(transform);
+                    let submodel = step.new_submodel(sfrc.file.clone(), transform);
                     traverse_design(source_map, &sfrc.file, child_ctx, submodel);
                 }
             }
