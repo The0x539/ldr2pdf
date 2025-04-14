@@ -50,7 +50,7 @@ impl FileRefResolver for Resolver {
         let ldraw = Path::new("C:/Program Files/Studio 2.0/ldraw");
         let custom = dirs::data_local_dir().unwrap().join("Stud.io/CustomParts");
 
-        for dir in [
+        let search_dirs = [
             custom.join("parts"),
             ldraw.join("parts"),
             // primitive quality order: normal, low, high, very low
@@ -63,14 +63,28 @@ impl FileRefResolver for Resolver {
             ldraw.join("UnOfficial/p/8"),
             ldraw.join("UnOfficial/p/48"),
             ldraw.join("UnOfficial/p/4"),
-        ] {
-            let path = dir.join(&filename);
-            if path.exists() {
-                return std::fs::read(path).map_err(|e| {
-                    weldr::ResolveError::new(filename.to_string_lossy().into_owned(), e)
-                });
+        ];
+
+        let mut paths = search_dirs
+            .iter()
+            .map(|d| d.join(&filename))
+            .collect::<Vec<_>>();
+
+        for prefix in [r"48/", r"8/", r"4/"] {
+            if let Some(filename) = filename.to_str().and_then(|s| s.strip_prefix(prefix)) {
+                paths.extend(search_dirs.iter().map(|d| d.join(filename)));
             }
         }
+
+        for path in paths {
+            if !path.exists() {
+                continue;
+            }
+
+            return std::fs::read(path)
+                .map_err(|e| weldr::ResolveError::new(filename.to_string_lossy().into_owned(), e));
+        }
+
         Err(weldr::ResolveError::new_raw(
             filename.to_string_lossy().as_ref(),
         ))
