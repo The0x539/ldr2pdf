@@ -1,7 +1,7 @@
 use bevy_lines::prelude::*;
 use bevy_mod_outline::*;
 use ldr2pdf_common::{
-    ldr::{ColorCode, ColorMap, GeometryContext, new_color},
+    ldr::{new_color, ColorCode, ColorMap, GeometryContext},
     resolver::Resolver,
 };
 use std::collections::HashMap;
@@ -24,7 +24,11 @@ pub fn setup(
     mut ambient_light: ResMut<AmbientLight>,
     mut model_assets: ModelAssets<'_>,
 ) {
-    let path = dirs::document_dir().unwrap().join("lego/aria/HQ.io");
+    let path = std::env::args_os()
+        .nth(1)
+        .map(From::from)
+        .unwrap_or_else(|| dirs::document_dir().unwrap().join("lego/aria/HQ.io"));
+
     let file = path.file_name().unwrap();
 
     let resolver = Resolver::new(&path).unwrap();
