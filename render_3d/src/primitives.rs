@@ -2,24 +2,85 @@ use bevy_lines::prelude::*;
 use ldr2pdf_common::ldr::{
     CURRENT_COLOR, ColorCode, ColorMap, GeometryContext, Winding, new_color,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use weldr::{Command, SourceMap};
 
-use bevy::{
-    asset::RenderAssetUsages,
-    prelude::*,
-    render::mesh::{Indices, PrimitiveTopology},
-};
+use bevy::{asset::RenderAssetUsages, prelude::*, render::mesh::PrimitiveTopology};
 
 use crate::material::ATTRIBUTE_FLAGS;
 
 #[derive(Default)]
 pub struct Primitives {
-    faces: Vec<Triangle3d>,
+    faces: Vec<TriOrQuad<Vec3>>,
     face_colors: HashMap<usize, ColorCode>,
     contrast_faces: HashSet<usize>,
     lines: Vec<[Vec3; 2]>,
     opt_lines: Vec<([Vec3; 2], [Vec3; 2])>,
+}
+
+#[derive(Copy, Clone)]
+enum TriOrQuad<T> {
+    Tri([T; 3]),
+    Quad([T; 4]),
+}
+
+impl<T> TriOrQuad<T> {
+    fn as_slice(&self) -> &[T] {
+        match self {
+            Self::Tri(x) => x,
+            Self::Quad(x) => x,
+        }
+    }
+
+    fn as_mut_slice(&mut self) -> &mut [T] {
+        match self {
+            Self::Tri(x) => x,
+            Self::Quad(x) => x,
+        }
+    }
+
+    fn map<U>(self, f: impl FnMut(T) -> U) -> TriOrQuad<U> {
+        match self {
+            Self::Tri(x) => TriOrQuad::Tri(x.map(f)),
+            Self::Quad(x) => TriOrQuad::Quad(x.map(f)),
+        }
+    }
+
+    fn as_flat_tris<'a>(&'a self) -> impl Iterator<Item = &'a T> {
+        let (first, second) = match self {
+            Self::Tri([a, b, c]) => ([a, b, c], None),
+            Self::Quad([a, b, c, d]) => ([a, b, c], Some([c, d, a])),
+        };
+
+        std::iter::once(first).chain(second).flatten()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a mut TriOrQuad<T> {
+    type Item = &'a mut T;
+    type IntoIter = std::slice::IterMut<'a, T>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.as_mut_slice().into_iter()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a TriOrQuad<T> {
+    type Item = &'a T;
+    type IntoIter = std::slice::Iter<'a, T>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.as_slice().into_iter()
+    }
+}
+
+impl TriOrQuad<Vec3> {
+    fn first_triangle(&self) -> Triangle3d {
+        let (Self::Tri([a, b, c]) | Self::Quad([a, b, c, _])) = *self;
+        Triangle3d::new(a, b, c)
+    }
+
+    fn normal(&self) -> Vec3 {
+        self.first_triangle().normal().unwrap_or(Dir3::X).as_vec3()
+    }
 }
 
 impl Primitives {
@@ -32,18 +93,14 @@ impl Primitives {
     }
 
     pub fn build_mesh(&self, color_map: &ColorMap) -> Mesh {
-        let mut positions = Vec::<Vec3>::new();
-        let mut normals = Vec::<Vec3>::new();
-        let mut colors = Vec::<Vec4>::new();
-        let mut indices = Indices::U16(vec![]);
-        let mut flags = Vec::<u32>::new();
-        let mut dedup = HashMap::<([u32; 3], [u32; 3], u32), u32>::new();
+        struct Vertex {
+            position: Vec3,
+            normal: Vec3,
+            color: Vec4,
+            flags: u32,
+        }
 
-        // We want to use indexed vertices for memory efficiency,
-        // but we also (usually?) want flat normals,
-        // so we need to compute flat normals ourselves
-        // and duplicate the vertex for each face it belongs to
-        // TODO: Identify cases where we do want smooth normals
+        let mut tris = vec![];
 
         for (triangle_index, triangle) in self.faces.iter().enumerate() {
             let color_code = *self
@@ -59,23 +116,58 @@ impl Primitives {
 
             let is_contrast = self.contrast_faces.contains(&triangle_index);
 
-            let normal = triangle.normal().unwrap_or(Dir3::X).as_vec3();
-            for vertex in triangle.vertices {
-                let key = (bytemuck::cast(vertex), bytemuck::cast(normal), color_code);
+            let normal = triangle.normal();
 
-                let index = *dedup.entry(key).or_insert_with(|| {
-                    let i = positions.len() as u32;
-                    positions.push(vertex);
-                    normals.push(normal);
-                    flags.push(is_contrast as u32);
-                    if !self.face_colors.is_empty() {
-                        colors.push(color);
+            let tri = triangle.map(|position| Vertex {
+                position,
+                normal,
+                color,
+                flags: is_contrast as u32,
+            });
+            tris.push(tri);
+        }
+
+        let mut contributing_faces = BTreeSet::new();
+
+        for (i, tri) in tris.iter_mut().enumerate() {
+            for vert in tri {
+                contributing_faces.clear();
+
+                for ([point_a, point_b], _) in &self.opt_lines {
+                    if !(vert.position == *point_a || vert.position == *point_b) {
+                        continue;
                     }
-                    i
-                });
+                    // [a, b] is an opt-line that has `vert` as an endpoint
 
-                indices.push(index);
+                    for (j, face) in self.faces.iter().enumerate() {
+                        let is_on_face = |point| face.as_slice().contains(point);
+                        if !(is_on_face(point_a) && is_on_face(point_b)) {
+                            continue;
+                        }
+                        // `face` is a triangle that has [a, b] as an edge
+
+                        contributing_faces.insert(j);
+                    }
+                }
+
+                if contributing_faces.contains(&i) {
+                    vert.normal = Vec3::ZERO;
+                    for &j in &contributing_faces {
+                        vert.normal += self.faces[j].normal();
+                    }
+                    vert.normal = vert.normal.normalize();
+                }
             }
+        }
+
+        let (mut positions, mut normals, mut colors, mut flags) = (vec![], vec![], vec![], vec![]);
+        for vert in tris.iter().flat_map(TriOrQuad::as_flat_tris) {
+            positions.push(vert.position);
+            normals.push(vert.normal);
+            if !self.face_colors.is_empty() {
+                colors.push(vert.color);
+            }
+            flags.push(vert.flags);
         }
 
         let mut mesh = Mesh::new(
@@ -88,7 +180,7 @@ impl Primitives {
             mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
         }
         mesh.insert_attribute(ATTRIBUTE_FLAGS, flags);
-        mesh.insert_indices(indices);
+        // mesh.insert_indices(indices);
         mesh
     }
 
@@ -166,12 +258,16 @@ fn traverse_part(
             current_winding
         };
 
-        let mut push_triangle = |vertices, color| {
+        let mut push_triangle = |vertices: TriOrQuad<weldr::Vec3>, color| {
             let color = new_color(ctx.color, color);
-            let vertices = project(&ctx, vertices);
-            let mut tri = Triangle3d { vertices };
+
+            let mut vertices = vertices.map(|v| {
+                let [v] = ctx.project([v]);
+                Vec3::from_array(v.to_array())
+            });
+
             if effective_winding != Winding::Ccw {
-                tri.reverse();
+                vertices.as_mut_slice().reverse();
             }
 
             if color != CURRENT_COLOR {
@@ -181,7 +277,7 @@ fn traverse_part(
                 output.contrast_faces.insert(output.faces.len());
             }
 
-            output.faces.push(tri);
+            output.faces.push(vertices);
         };
 
         match cmd {
@@ -209,13 +305,12 @@ fn traverse_part(
             }
             Command::Triangle(t) => {
                 assert!(!invert_next);
-                push_triangle(t.vertices, t.color);
+                push_triangle(TriOrQuad::Tri(t.vertices), t.color);
             }
             Command::Quad(q) => {
                 assert!(!invert_next);
-                let [a, b, c, d] = q.vertices;
-                push_triangle([a, b, c], q.color);
-                push_triangle([c, d, a], q.color);
+                push_triangle(TriOrQuad::Quad(q.vertices), q.color);
+                // push_triangle([c, d, a], q.color);
             }
             _ => {}
         }
