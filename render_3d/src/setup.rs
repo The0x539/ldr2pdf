@@ -1,7 +1,7 @@
 use bevy_lines::prelude::*;
 use bevy_mod_outline::*;
 use ldr2pdf_common::{
-    ldr::{new_color, ColorCode, ColorMap, GeometryContext},
+    ldr::{ColorCode, ColorMap, GeometryContext, new_color},
     resolver::Resolver,
 };
 use std::collections::HashMap;
@@ -75,11 +75,6 @@ pub fn setup(
         .spawn((
             Transform::from_matrix(base_transform),
             InheritedVisibility::VISIBLE,
-            OutlineVolume {
-                visible: true,
-                colour: Color::srgb(1.0, 0.0, 0.0),
-                width: 4.0,
-            },
         ))
         .with_children(|root| {
             handles.spawn_model(root, &model, &mut model_assets);
@@ -201,14 +196,24 @@ impl Handles {
                         self.spawn_part(parent, part);
                     }
                     StepItem::Submodel(submodel) => {
-                        let bundle = (
-                            Transform::from_matrix(submodel.transform),
-                            InheritedVisibility::VISIBLE,
-                            InheritOutline,
-                        );
-                        parent.spawn(bundle).with_children(|subparent| {
-                            self.spawn_model(subparent, submodel, assets)
-                        });
+                        let has_outlines = submodel.name == "office level";
+
+                        let outline = OutlineVolume {
+                            visible: true,
+                            width: 4.0,
+                            colour: Color::srgb(1.0, 0.0, 0.0),
+                        };
+
+                        parent
+                            .spawn((
+                                Transform::from_matrix(submodel.transform),
+                                InheritedVisibility::VISIBLE,
+                            ))
+                            .insert_if(outline, || has_outlines)
+                            .insert_if(InheritOutline, || !has_outlines)
+                            .with_children(|subparent| {
+                                self.spawn_model(subparent, submodel, assets)
+                            });
                     }
                 }
             }
