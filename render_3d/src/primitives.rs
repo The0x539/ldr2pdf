@@ -1,11 +1,16 @@
 use bevy_lines::prelude::*;
+use bytemuck::NoUninit;
 use ldr2pdf_common::ldr::{
     CURRENT_COLOR, ColorCode, ColorMap, GeometryContext, Winding, new_color,
 };
 use std::collections::{BTreeSet, HashMap, HashSet};
 use weldr::{Command, SourceMap};
 
-use bevy::{asset::RenderAssetUsages, prelude::*, render::mesh::PrimitiveTopology};
+use bevy::{
+    asset::RenderAssetUsages,
+    prelude::*,
+    render::mesh::{Indices, PrimitiveTopology},
+};
 
 use crate::material::ATTRIBUTE_FLAGS;
 
@@ -93,11 +98,19 @@ impl Primitives {
     }
 
     pub fn build_mesh(&self, color_map: &ColorMap) -> Mesh {
+        #[derive(Copy, Clone, NoUninit)]
+        #[repr(C)]
         struct Vertex {
             position: Vec3,
             normal: Vec3,
-            color: Vec4,
+            color: [f32; 4],
             flags: u32,
+        }
+
+        impl Vertex {
+            fn key(&self) -> &[u32; 11] {
+                bytemuck::cast_ref(self)
+            }
         }
 
         let mut tris = vec![];
@@ -108,10 +121,12 @@ impl Primitives {
                 .get(&triangle_index)
                 .unwrap_or(&CURRENT_COLOR);
 
-            let mut color = Vec4::ZERO;
+            let mut color = [0.0; 4];
             if color_code != CURRENT_COLOR {
                 let c = color_map.by_code(color_code).value;
-                color = Color::srgb_u8(c.red, c.green, c.blue).to_srgba().to_vec4();
+                color = Color::srgb_u8(c.red, c.green, c.blue)
+                    .to_srgba()
+                    .to_f32_array();
             }
 
             let is_contrast = self.contrast_faces.contains(&triangle_index);
@@ -160,14 +175,26 @@ impl Primitives {
             }
         }
 
+        let mut dedup = HashMap::new();
+        let mut indices = Indices::U16(vec![]);
+
         let (mut positions, mut normals, mut colors, mut flags) = (vec![], vec![], vec![], vec![]);
+
         for vert in tris.iter().flat_map(TriOrQuad::as_flat_tris) {
-            positions.push(vert.position);
-            normals.push(vert.normal);
-            if !self.face_colors.is_empty() {
-                colors.push(vert.color);
-            }
-            flags.push(vert.flags);
+            let index = *dedup.entry(vert.key()).or_insert_with(|| {
+                let i = positions.len() as u32;
+
+                positions.push(vert.position);
+                normals.push(vert.normal);
+                flags.push(vert.flags);
+                if !self.face_colors.is_empty() {
+                    colors.push(vert.color);
+                }
+
+                i
+            });
+
+            indices.push(index);
         }
 
         let mut mesh = Mesh::new(
@@ -180,7 +207,7 @@ impl Primitives {
             mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
         }
         mesh.insert_attribute(ATTRIBUTE_FLAGS, flags);
-        // mesh.insert_indices(indices);
+        mesh.insert_indices(indices);
         mesh
     }
 
