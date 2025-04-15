@@ -134,7 +134,7 @@ fn traverse_part(
             .map(|v| Vec3::from_array(v.to_array()))
     }
 
-    fn is_stud_name(name: &str) -> bool {
+    fn is_stud_name(name: &&str) -> bool {
         [
             "stud.dat",
             "studa.dat",
@@ -151,8 +151,13 @@ fn traverse_part(
     }
 
     // Are we the cylindrical part of a stud, to be drawn with high contrast?
-    let contrast = ctx.names.get(0).is_some_and(|n| n.ends_with("4-4cyli.dat"))
-        && ctx.names.get(1).is_some_and(|n| is_stud_name(n));
+    // True iff this polygon is descendant of the "4-4cyli.dat" submodel of a stud.
+    let contrast = ctx
+        .names
+        .iter()
+        .skip(1)
+        .position(is_stud_name)
+        .is_some_and(|i| ctx.names[i].ends_with("4-4cyli.dat"));
 
     for cmd in &model.cmds {
         let effective_winding = if current_inverted {
