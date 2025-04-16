@@ -1,5 +1,6 @@
 use bevy_flycam::NoCameraPlayerPlugin;
 use bevy_lines::prelude::*;
+use bevy_mod_outline::{AutoGenerateOutlineNormalsPlugin, OutlinePlugin};
 
 use bevy::{
     prelude::*,
@@ -8,11 +9,19 @@ use bevy::{
         settings::{Backends, RenderCreation, WgpuSettings},
     },
 };
-use bevy_mod_outline::{AutoGenerateOutlineNormalsPlugin, OutlinePlugin};
 
 mod material;
 mod primitives;
 mod setup;
+mod watch;
+
+// TODO: put this in bevy state properly
+fn model_path() -> std::path::PathBuf {
+    std::env::args_os()
+        .nth(1)
+        .map(From::from)
+        .unwrap_or_else(|| dirs::document_dir().unwrap().join("lego/aria/HQ.io"))
+}
 
 fn main() {
     App::new()
@@ -46,5 +55,9 @@ fn main() {
             speed: 15.0,
         })
         .add_systems(Startup, setup::setup)
+        .add_systems(
+            Update,
+            setup::reset.run_if(watch::file_touched(&model_path())),
+        )
         .run();
 }

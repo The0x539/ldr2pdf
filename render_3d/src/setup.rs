@@ -19,16 +19,14 @@ pub struct ModelAssets<'w> {
     line_materials: ResMut<'w, Assets<PolylineMaterial>>,
 }
 
-pub fn setup(
-    mut commands: Commands,
-    mut ambient_light: ResMut<AmbientLight>,
-    mut model_assets: ModelAssets<'_>,
-) {
-    let path = std::env::args_os()
-        .nth(1)
-        .map(From::from)
-        .unwrap_or_else(|| dirs::document_dir().unwrap().join("lego/aria/HQ.io"));
+#[derive(Component)]
+pub struct ModelRoot;
 
+fn load_model(mut commands: Commands, mut model_assets: ModelAssets) {
+    let path = crate::model_path();
+    if !path.exists() {
+        return;
+    }
     let file = path.file_name().unwrap();
 
     let resolver = Resolver::new(&path).unwrap();
@@ -75,11 +73,14 @@ pub fn setup(
         .spawn((
             Transform::from_matrix(base_transform),
             InheritedVisibility::VISIBLE,
+            ModelRoot,
         ))
         .with_children(|root| {
             handles.spawn_model(root, &model, &mut model_assets);
         });
+}
 
+fn initial_setup(mut commands: Commands, mut ambient_light: ResMut<AmbientLight>) {
     commands.spawn((
         PointLight {
             radius: 1.0,
@@ -102,6 +103,26 @@ pub fn setup(
 
     #[cfg(feature = "overlay")]
     commands.spawn(iyes_perf_ui::entries::PerfUiAllEntries::default());
+}
+
+pub fn setup(
+    mut commands: Commands,
+    ambient_light: ResMut<AmbientLight>,
+    model_assets: ModelAssets<'_>,
+) {
+    load_model(commands.reborrow(), model_assets);
+    initial_setup(commands.reborrow(), ambient_light);
+}
+
+pub fn reset(
+    root: Option<Single<Entity, With<ModelRoot>>>,
+    mut commands: Commands,
+    model_assets: ModelAssets,
+) {
+    if let Some(root) = root {
+        commands.entity(*root).despawn_recursive();
+    }
+    load_model(commands.reborrow(), model_assets);
 }
 
 struct Handles {
