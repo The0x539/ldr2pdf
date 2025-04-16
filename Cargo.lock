@@ -1988,6 +1988,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
 
 [[package]]
+name = "flat-zip"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4368a5f7a59472e23849584013710b3f89815bf3226983501ac4b3a652deff5a"
+
+[[package]]
 name = "flate2"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2577,6 +2583,7 @@ dependencies = [
  "bevy_mod_outline",
  "bytemuck",
  "dirs",
+ "flat-zip",
  "glam 0.23.0",
  "iyes_perf_ui",
  "ldr2pdf_common",

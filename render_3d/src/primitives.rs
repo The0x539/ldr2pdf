@@ -1,9 +1,10 @@
 use bevy_lines::prelude::*;
 use bytemuck::NoUninit;
+use flat_zip::FlatZipExt;
 use ldr2pdf_common::ldr::{
     CURRENT_COLOR, ColorCode, ColorMap, GeometryContext, Winding, new_color,
 };
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use weldr::{Command, SourceMap};
 
 use bevy::{
@@ -142,36 +143,45 @@ impl Primitives {
             tris.push(tri);
         }
 
-        let mut contributing_faces = BTreeSet::new();
+        let mut vert_to_edge = HashMap::<[u32; 3], Vec<usize>>::new();
+        for (i, (points, _)) in self.opt_lines.iter().enumerate() {
+            for point in points {
+                let key: [u32; 3] = bytemuck::cast(*point);
+                vert_to_edge.entry(key).or_default().push(i);
+            }
+        }
 
-        for (i, tri) in tris.iter_mut().enumerate() {
-            for vert in tri {
-                contributing_faces.clear();
+        let mut edge_to_face = HashMap::<[[u32; 3]; 2], Vec<usize>>::new();
+        for (i, face) in self.faces.iter().enumerate() {
+            let keys: &[[Vec3; 2]] = match *face {
+                TriOrQuad::Tri([a, b, c]) => &[[a, b], [b, c], [c, a]],
+                TriOrQuad::Quad([a, b, c, d]) => &[[a, b], [b, c], [c, d], [d, a]],
+            };
 
-                for ([point_a, point_b], _) in &self.opt_lines {
-                    if !(vert.position == *point_a || vert.position == *point_b) {
-                        continue;
-                    }
-                    // [a, b] is an opt-line that has `vert` as an endpoint
+            for key in keys.iter().copied().map(bytemuck::cast) {
+                edge_to_face.entry(key).or_default().push(i);
+            }
+        }
 
-                    for (j, face) in self.faces.iter().enumerate() {
-                        let is_on_face = |point| face.as_slice().contains(point);
-                        if !(is_on_face(point_a) && is_on_face(point_b)) {
-                            continue;
-                        }
-                        // `face` is a triangle that has [a, b] as an edge
+        for (i, vert) in tris.iter_mut().enumerate().flat_zip() {
+            let edge_indices = vert_to_edge
+                .get(bytemuck::cast_ref::<_, [u32; 3]>(&vert.position))
+                .map(Vec::as_slice)
+                .unwrap_or_default();
 
-                        contributing_faces.insert(j);
-                    }
-                }
+            let face_indices = edge_indices.iter().flat_map(|j| {
+                let [a, b] = self.opt_lines[*j].0.map(bytemuck::cast::<_, [u32; 3]>);
+                let foo = edge_to_face.get(&[a, b]);
+                let bar = edge_to_face.get(&[b, a]);
+                foo.into_iter().chain(bar).flatten().copied()
+            });
 
-                if contributing_faces.contains(&i) {
-                    vert.normal = Vec3::ZERO;
-                    for &j in &contributing_faces {
-                        vert.normal += self.faces[j].normal();
-                    }
-                    vert.normal = vert.normal.normalize();
-                }
+            let smooth = face_indices.clone().any(|j| j == i);
+            if smooth {
+                vert.normal = face_indices
+                    .map(|j| self.faces[j].normal())
+                    .sum::<Vec3>()
+                    .normalize();
             }
         }
 
