@@ -5,13 +5,10 @@ use ldr2pdf_common::ldr::{
     CURRENT_COLOR, ColorCode, ColorMap, GeometryContext, Winding, new_color,
 };
 use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
 use weldr::{Command, SourceMap};
 
-use bevy::{
-    asset::RenderAssetUsages,
-    prelude::*,
-    render::mesh::{Indices, PrimitiveTopology},
-};
+use bevy::{prelude::*, render::mesh::Indices};
 
 use crate::material::ATTRIBUTE_FLAGS;
 
@@ -60,6 +57,16 @@ impl<T> TriOrQuad<T> {
 
         std::iter::once(first).chain(second).flatten()
     }
+
+    fn edges(&self) -> TriOrQuad<[T; 2]>
+    where
+        T: Copy,
+    {
+        match *self {
+            Self::Tri([a, b, c]) => TriOrQuad::Tri([[a, b], [b, c], [c, a]]),
+            Self::Quad([a, b, c, d]) => TriOrQuad::Quad([[a, b], [b, c], [c, d], [d, a]]),
+        }
+    }
 }
 
 impl<'a, T> IntoIterator for &'a mut TriOrQuad<T> {
@@ -89,6 +96,43 @@ impl TriOrQuad<Vec3> {
     }
 }
 
+struct AttributeFace {
+    color: Option<[u8; 3]>,
+    flags: u32,
+    verts: TriOrQuad<AttributeVertex>,
+}
+
+#[derive(Copy, Clone, NoUninit)]
+#[repr(C)]
+struct AttributeVertex {
+    position: Vec3,
+    normal: Vec3,
+}
+
+trait AsKey {
+    type Key: Hash + Eq + Ord;
+    fn as_key(&self) -> &Self::Key;
+    fn to_key(&self) -> Self::Key;
+}
+
+macro_rules! as_key {
+    ($T:ty as $U:ty) => {
+        impl AsKey for $T {
+            type Key = $U;
+            fn as_key(&self) -> &Self::Key {
+                bytemuck::cast_ref(self)
+            }
+            fn to_key(&self) -> Self::Key {
+                bytemuck::cast(*self)
+            }
+        }
+    };
+}
+
+as_key!(Vec3 as [u32; 3]);
+as_key!([Vec3; 2] as [u32; 6]);
+as_key!(AttributeVertex as [u32; 6]);
+
 impl Primitives {
     pub fn of_part(source_map: &SourceMap, model_name: &str) -> Self {
         let mut primitives = Self::default();
@@ -99,82 +143,83 @@ impl Primitives {
     }
 
     pub fn build_mesh(&self, color_map: &ColorMap) -> Mesh {
-        #[derive(Copy, Clone, NoUninit)]
-        #[repr(C)]
-        struct Vertex {
-            position: Vec3,
-            normal: Vec3,
-            color: [f32; 4],
-            flags: u32,
-        }
+        let mut attr_faces = vec![];
 
-        impl Vertex {
-            fn key(&self) -> &[u32; 11] {
-                bytemuck::cast_ref(self)
-            }
-        }
-
-        let mut tris = vec![];
-
-        for (triangle_index, triangle) in self.faces.iter().enumerate() {
-            let color_code = *self
+        for (face_index, face) in self.faces.iter().enumerate() {
+            let color = self
                 .face_colors
-                .get(&triangle_index)
-                .unwrap_or(&CURRENT_COLOR);
+                .get(&face_index)
+                .map(|c| color_map.by_code(*c).value)
+                .map(|c| [c.red, c.green, c.blue]);
 
-            let mut color = [0.0; 4];
-            if color_code != CURRENT_COLOR {
-                let c = color_map.by_code(color_code).value;
-                color = Color::srgb_u8(c.red, c.green, c.blue)
-                    .to_srgba()
-                    .to_f32_array();
-            }
+            let is_contrast = self.contrast_faces.contains(&face_index);
 
-            let is_contrast = self.contrast_faces.contains(&triangle_index);
+            let normal = face.normal();
+            let verts = face.map(|position| AttributeVertex { position, normal });
 
-            let normal = triangle.normal();
-
-            let tri = triangle.map(|position| Vertex {
-                position,
-                normal,
+            attr_faces.push(AttributeFace {
                 color,
                 flags: is_contrast as u32,
+                verts,
             });
-            tris.push(tri);
         }
 
-        let mut vert_to_edge = HashMap::<[u32; 3], Vec<usize>>::new();
+        self.compute_smooth_normals(&mut attr_faces);
+
+        let include_colors = !self.face_colors.is_empty();
+
+        let IndexedVertices {
+            indices,
+            positions,
+            normals,
+            colors,
+            flags,
+        } = generate_indices(&attr_faces, include_colors);
+
+        let mut mesh = Mesh::new(default(), default());
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+        if include_colors {
+            mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
+        }
+        mesh.insert_attribute(ATTRIBUTE_FLAGS, flags);
+        mesh.insert_indices(indices);
+
+        mesh
+    }
+
+    fn compute_smooth_normals(&self, attr_faces: &mut [AttributeFace]) {
+        let mut vert_to_edge = HashMap::<_, Vec<usize>>::new();
         for (i, (points, _)) in self.opt_lines.iter().enumerate() {
             for point in points {
-                let key: [u32; 3] = bytemuck::cast(*point);
-                vert_to_edge.entry(key).or_default().push(i);
+                vert_to_edge.entry(point.to_key()).or_default().push(i);
             }
         }
 
-        let mut edge_to_face = HashMap::<[[u32; 3]; 2], Vec<usize>>::new();
+        let mut edge_to_face = HashMap::<_, Vec<usize>>::new();
         for (i, face) in self.faces.iter().enumerate() {
-            let keys: &[[Vec3; 2]] = match *face {
-                TriOrQuad::Tri([a, b, c]) => &[[a, b], [b, c], [c, a]],
-                TriOrQuad::Quad([a, b, c, d]) => &[[a, b], [b, c], [c, d], [d, a]],
+            for edge in &face.edges() {
+                edge_to_face.entry(edge.to_key()).or_default().push(i);
+            }
+        }
+
+        for (i, vert) in attr_faces
+            .iter_mut()
+            .map(|face| &mut face.verts)
+            .enumerate()
+            .flat_zip()
+        {
+            let Some(edge_indices) = vert_to_edge.get(vert.position.as_key()) else {
+                continue;
             };
 
-            for key in keys.iter().copied().map(bytemuck::cast) {
-                edge_to_face.entry(key).or_default().push(i);
-            }
-        }
-
-        for (i, vert) in tris.iter_mut().enumerate().flat_zip() {
-            let edge_indices = vert_to_edge
-                .get(bytemuck::cast_ref::<_, [u32; 3]>(&vert.position))
-                .map(Vec::as_slice)
-                .unwrap_or_default();
-
-            let face_indices = edge_indices.iter().flat_map(|j| {
-                let [a, b] = self.opt_lines[*j].0.map(bytemuck::cast::<_, [u32; 3]>);
-                let foo = edge_to_face.get(&[a, b]);
-                let bar = edge_to_face.get(&[b, a]);
-                foo.into_iter().chain(bar).flatten().copied()
-            });
+            let face_indices = edge_indices
+                .iter()
+                .map(|j| self.opt_lines[*j].0)
+                .flat_map(|[a, b]| [[a, b], [b, a]])
+                .filter_map(|edge| edge_to_face.get(edge.as_key()))
+                .flatten()
+                .copied();
 
             let smooth = face_indices.clone().any(|j| j == i);
             if smooth {
@@ -184,41 +229,6 @@ impl Primitives {
                     .normalize();
             }
         }
-
-        let mut dedup = HashMap::new();
-        let mut indices = Indices::U16(vec![]);
-
-        let (mut positions, mut normals, mut colors, mut flags) = (vec![], vec![], vec![], vec![]);
-
-        for vert in tris.iter().flat_map(TriOrQuad::as_flat_tris) {
-            let index = *dedup.entry(vert.key()).or_insert_with(|| {
-                let i = positions.len() as u32;
-
-                positions.push(vert.position);
-                normals.push(vert.normal);
-                flags.push(vert.flags);
-                if !self.face_colors.is_empty() {
-                    colors.push(vert.color);
-                }
-
-                i
-            });
-
-            indices.push(index);
-        }
-
-        let mut mesh = Mesh::new(
-            PrimitiveTopology::TriangleList,
-            RenderAssetUsages::default(),
-        );
-        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-        if !self.face_colors.is_empty() {
-            mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
-        }
-        mesh.insert_attribute(ATTRIBUTE_FLAGS, flags);
-        mesh.insert_indices(indices);
-        mesh
     }
 
     pub fn build_lines(&self) -> Polyline {
@@ -236,6 +246,62 @@ impl Primitives {
             vertices: self.opt_lines.iter().flat_map(|v| v.0).collect(),
             control_vertices: Some(self.opt_lines.iter().flat_map(|v| v.1).collect()),
         })
+    }
+}
+
+struct IndexedVertices {
+    indices: Indices,
+    positions: Vec<Vec3>,
+    normals: Vec<Vec3>,
+    colors: Vec<[f32; 4]>,
+    flags: Vec<u32>,
+}
+
+fn generate_indices(faces: &[AttributeFace], include_colors: bool) -> IndexedVertices {
+    let mut indices = Indices::U16(vec![]);
+    let (mut positions, mut normals, mut colors, mut flags) = (vec![], vec![], vec![], vec![]);
+
+    let mut seen = HashMap::new();
+
+    for (face, vert) in faces
+        .iter()
+        .map(|face| (face, face.verts.as_flat_tris()))
+        .flat_zip()
+    {
+        let key = (
+            vert.position.as_key(),
+            vert.normal.as_key(),
+            face.flags,
+            face.color,
+        );
+
+        let index = *seen.entry(key).or_insert_with(|| {
+            let i = positions.len() as u32;
+
+            positions.push(vert.position);
+            normals.push(vert.normal);
+            flags.push(face.flags);
+
+            if include_colors {
+                let color = match face.color {
+                    Some([r, g, b]) => Srgba::rgb_u8(r, g, b),
+                    None => Srgba::NONE,
+                };
+                colors.push(color.to_f32_array());
+            }
+
+            i
+        });
+
+        indices.push(index);
+    }
+
+    IndexedVertices {
+        indices,
+        positions,
+        normals,
+        colors,
+        flags,
     }
 }
 
