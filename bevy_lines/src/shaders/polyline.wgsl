@@ -45,7 +45,7 @@ fn project_1(point: vec3<f32>) -> vec4<f32> {
 
 fn project_2(point: vec4<f32>) -> vec2<f32> {
     let resolution = view.viewport.zw;
-    return resolution * (0.5 * point.xy / point.w + 0.5);
+    return resolution * (0.5 * point.xy / abs(point.w) + 0.5);
 }
 
 fn project(point: vec3<f32>) -> vec2<f32> {
@@ -124,8 +124,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         if intersects {
             // set something to NaN that will propagate to the output coord
             let a = 0.0;
-            let b = 0.0;
-            screen0 = vec2(a / b);
+            screen0 = vec2(a / a);
         }
     #endif
 
