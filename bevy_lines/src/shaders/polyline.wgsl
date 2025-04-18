@@ -39,35 +39,19 @@ struct Line {
     intercept: f32,
 }
 
-fn project_1(point: vec3<f32>) -> vec4<f32> {
-    return view.clip_from_world * polyline.model * vec4(point, 1.0);
+struct Segment2 {
+    a: vec2<f32>,
+    b: vec2<f32>,
 }
 
-fn project_2(point: vec4<f32>) -> vec2<f32> {
-    let resolution = view.viewport.zw;
-    return resolution * (0.5 * point.xy / abs(point.w) + 0.5);
+struct Segment3 {
+    a: vec3<f32>,
+    b: vec3<f32>,
 }
 
-fn project(point: vec3<f32>) -> vec2<f32> {
-    return project_2(project_1(point));
-}
-
-fn find_line(a: vec2<f32>, b: vec2<f32>) -> Line {
-    let slope = (b.y - a.y) / (b.x - a.x);
-    let intercept = a.y - slope * a.x;
-    return Line(slope, intercept);
-}
-
-fn find_intersection(y1: Line, y2: Line) -> vec2<f32> {
-    // y1 = m1x + b1
-    // y2 = m2x + b2
-    // m1x + b1 = m2x + b2
-    // m1x - m2x = b2 - b1
-    // (m1 - m2)x = b2 - b1
-    // x = (b2 - b1) / (m1 - m2)
-    let x = (y2.intercept - y1.intercept) / (y1.slope - y2.slope);
-    let y = y1.slope * x + y1.intercept;
-    return vec2(x, y);
+struct Segment4 {
+    a: vec4<f32>,
+    b: vec4<f32>,
 }
 
 @vertex
@@ -82,23 +66,47 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     );
     let position = positions[vertex.index];
 
-    // algorithm based on https://wwwtyro.net/2019/11/18/instanced-lines.html
-    var clip0 = project_1(vertex.point_a);
-    var clip1 = project_1(vertex.point_b);
+    let drawn_world = world_from_model(vertex.point_a, vertex.point_b);
 
-    // Manual near plane clipping to avoid errors when doing the perspective divide inside this shader.
-    clip0 = clip_near_plane(clip0, clip1);
-    clip1 = clip_near_plane(clip1, clip0);
+    var drawn_clip = clip_from_world(drawn_world);
+    // If one of the endpoints is behind the near plane (and thus possibly behind the camera),
+    //     truncate the line segment so that it's entirely in front of the plane.
+    // This avoids incorrect behavior when performing the perspective divide.
+    drawn_clip = clip_segment_to_near_plane(drawn_clip);
 
-    let clip = mix(clip0, clip1, position.z);
+    var drawn_screen = screen_from_clip(drawn_clip);
 
-    var screen0 = project_2(clip0);
-    var screen1 = project_2(clip1);
+    #ifdef POLYLINE_CONDITIONAL
+        var control_world = world_from_model(vertex.control_point_a, vertex.control_point_b);
+        // Unlike the drawn segment, the control segment cannot be clipped safely,
+        //     as its endpoints determine whether the main line gets drawn.
+        // However, shifting it along the axis defined by the drawn segment
+        //     will preserve its position relative to that segment's infinite line,
+        //     so we can do that instead to guarantee everything's in front of the camera.
+        control_world = shift_segment_to_near_plane(control_world, drawn_world);
 
-    let x_basis = normalize(screen1 - screen0);
+        let control_clip = clip_from_world(control_world);
+        let control_screen = screen_from_clip(control_clip);
+
+        let drawn_line = find_line(drawn_screen);
+        let control_line = find_line(control_screen);
+        let intersection = find_intersection(drawn_line, control_line);
+
+        let bounds = minmax(control_screen.a.x, control_screen.b.x);
+        let intersects = intersection.x >= bounds[0] && intersection.x <= bounds[1];
+
+        if intersects {
+            // Prevent the line from being drawn by throwing a NaN-shaped wrench into the math.
+            let zero = 0.0;
+            drawn_screen.a = vec2(zero / zero);
+        }
+    #endif
+
+    let x_basis = normalize(drawn_screen.b - drawn_screen.a);
     let y_basis = vec2(-x_basis.y, x_basis.x);
 
     var line_width = material.width;
+    let clip = mix(drawn_clip.a, drawn_clip.b, position.z);
     var color = material.color;
 
     #ifdef POLYLINE_PERSPECTIVE
@@ -110,27 +118,9 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         }
     #endif
 
-    #ifdef POLYLINE_CONDITIONAL
-        let pa = project(vertex.point_a);
-        let pb = project(vertex.point_b);
-        let cpa = project(vertex.control_point_a);
-        let cpb = project(vertex.control_point_b);
-        let intersection = find_intersection(find_line(pa, pb), find_line(cpa, cpb));
-        
-        let x0 = min(cpa.x, cpb.x);
-        let x1 = max(cpa.x, cpb.x);
-        let intersects = intersection.x >= x0 && intersection.x <= x1;
-
-        if intersects {
-            // set something to NaN that will propagate to the output coord
-            let a = 0.0;
-            screen0 = vec2(a / a);
-        }
-    #endif
-
     let pt_offset = line_width * (position.x * x_basis + position.y * y_basis);
-    let pt0 = screen0 + pt_offset;
-    let pt1 = screen1 + pt_offset;
+    let pt0 = drawn_screen.a + pt_offset;
+    let pt1 = drawn_screen.b + pt_offset;
     let pt = mix(pt0, pt1, position.z);
 
     var depth: f32 = clip.z;
@@ -152,7 +142,78 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     return VertexOutput(vec4(clip.w * ((2.0 * pt) / resolution - 1.0), depth, clip.w), color);
 }
 
-fn clip_near_plane(a: vec4<f32>, b: vec4<f32>) -> vec4<f32> {
+fn world_from_model(world_a: vec3<f32>, world_b: vec3<f32>) -> Segment3 {
+    let a = polyline.model * vec4(world_a, 1.0);
+    let b = polyline.model * vec4(world_b, 1.0);
+    return Segment3(a.xyz / a.w, b.xyz / b.w);
+}
+
+fn clip_from_world(seg: Segment3) -> Segment4 {
+    let a = view.clip_from_world * vec4(seg.a, 1.0);
+    let b = view.clip_from_world * vec4(seg.b, 1.0);
+    return Segment4(a, b);
+}
+
+fn screen_from_clip(seg: Segment4) -> Segment2 {
+    let res = view.viewport.zw;
+    let a = res * (0.5 * seg.a.xy / seg.a.w + 0.5);
+    let b = res * (0.5 * seg.b.xy / seg.b.w + 0.5);
+    return Segment2(a, b);
+}
+
+fn minmax(a: f32, b: f32) -> vec2<f32> {
+    return vec2(min(a, b), max(a, b));
+}
+
+fn find_line(seg: Segment2) -> Line {
+    var slope = (seg.b.y - seg.a.y) / (seg.b.x - seg.a.x);
+    slope = clamp(slope, -65536.0, 65536.0);
+    let intercept = seg.a.y - slope * seg.a.x;
+    return Line(slope, intercept);
+}
+
+fn sample_line(f: Line, x: f32) -> vec2<f32> {
+    let y = f.slope * x + f.intercept;
+    return vec2(x, y);
+}
+
+fn find_intersection(y1: Line, y2: Line) -> vec2<f32> {
+    // y1 = m1x + b1
+    // y2 = m2x + b2
+    // m1x + b1 = m2x + b2
+    // m1x - m2x = b2 - b1
+    // (m1 - m2)x = b2 - b1
+    // x = (b2 - b1) / (m1 - m2)
+    let x = (y2.intercept - y1.intercept) / (y1.slope - y2.slope);
+    return sample_line(y1, x);
+}
+
+fn shift_segment_to_near_plane(seg: Segment3, axis: Segment3) -> Segment3 {
+    let near = view.frustum[4];
+    let dist_a = dot(seg.a, near.xyz) + near.w;
+    let dist_b = dot(seg.b, near.xyz) + near.w;
+    // if one of the above values is positive,
+    //     then that point is in front of the near plane
+    // if it is negative, it is behind the plane,
+    //     and the segment will need to be shifted "forward" by that amount
+    // both points should be shifted based on whichever one needs a bigger nudge
+    let distance = max(0.0, max(-dist_a, -dist_b));
+
+    let direction = normalize(axis.b - axis.a);
+
+    // this dot product is the projection of `axis` onto the near plane's normal
+    // we want to move along `axis` enough to get `distance` units of projected movement along the normal
+    let nudge = distance * direction / dot(direction, near.xyz);
+    return Segment3(seg.a + nudge, seg.b + nudge);
+}
+
+fn clip_segment_to_near_plane(seg: Segment4) -> Segment4 {
+    let a = clip_point_to_near_plane(seg.a, seg.b);
+    let b = clip_point_to_near_plane(seg.b, seg.a);
+    return Segment4(a, b);
+}
+
+fn clip_point_to_near_plane(a: vec4<f32>, b: vec4<f32>) -> vec4<f32> {
     // Move a if a is behind the near plane and b is in front. 
     if a.z > a.w && b.z <= b.w {
         // Interpolate a towards b until it's at the near plane.
