@@ -1,5 +1,4 @@
 use bevy_lines::prelude::*;
-use bevy_mod_outline::*;
 use ldr2pdf_common::{
     ldr::{ColorCode, ColorMap, GeometryContext, new_color},
     resolver::Resolver,
@@ -183,23 +182,26 @@ impl Handles {
 
         let transform = Transform::from_matrix(part.transform);
 
-        parent
-            .spawn((Mesh3d(ph.mesh), material.clone(), transform, InheritOutline))
-            .with_children(|c| {
+        let mut entity = parent.spawn((Mesh3d(ph.mesh), material.clone(), transform));
+
+        #[cfg(feature = "outline")]
+        entity.insert(bevy_mod_outline::InheritOutline);
+
+        entity.with_children(|c| {
+            c.spawn(PolylineBundle {
+                polyline: PolylineHandle(ph.line),
+                material: self.line_material.clone(),
+                ..default()
+            });
+
+            if let Some(opt_line) = ph.opt_line {
                 c.spawn(PolylineBundle {
-                    polyline: PolylineHandle(ph.line),
-                    material: self.line_material.clone(),
+                    polyline: PolylineHandle(opt_line),
+                    material: self.opt_line_material.clone(),
                     ..default()
                 });
-
-                if let Some(opt_line) = ph.opt_line {
-                    c.spawn(PolylineBundle {
-                        polyline: PolylineHandle(opt_line),
-                        material: self.opt_line_material.clone(),
-                        ..default()
-                    });
-                }
-            });
+            }
+        });
     }
 
     fn spawn_model(
@@ -217,24 +219,26 @@ impl Handles {
                         self.spawn_part(parent, part);
                     }
                     StepItem::Submodel(submodel) => {
-                        let has_outlines = submodel.name == "office level";
+                        let mut entity = parent.spawn((
+                            Transform::from_matrix(submodel.transform),
+                            InheritedVisibility::VISIBLE,
+                        ));
 
-                        let outline = OutlineVolume {
-                            visible: true,
-                            width: 4.0,
-                            colour: Color::srgb(1.0, 0.0, 0.0),
-                        };
+                        entity.with_children(|subparent| {
+                            self.spawn_model(subparent, submodel, assets)
+                        });
 
-                        parent
-                            .spawn((
-                                Transform::from_matrix(submodel.transform),
-                                InheritedVisibility::VISIBLE,
-                            ))
-                            .insert_if(outline, || has_outlines)
-                            .insert_if(InheritOutline, || !has_outlines)
-                            .with_children(|subparent| {
-                                self.spawn_model(subparent, submodel, assets)
-                            });
+                        #[cfg(feature = "outline")]
+                        if submodel.name == "office level" {
+                            let outline = bevy_mod_outline::OutlineVolume {
+                                visible: true,
+                                width: 4.0,
+                                colour: Color::srgb(1.0, 0.0, 0.0),
+                            };
+                            entity.insert(outline);
+                        } else {
+                            entity.insert(bevy_mod_outline::InheritOutline);
+                        }
                     }
                 }
             }

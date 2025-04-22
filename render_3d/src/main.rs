@@ -1,6 +1,5 @@
 use bevy_flycam::NoCameraPlayerPlugin;
 use bevy_lines::prelude::*;
-use bevy_mod_outline::{AutoGenerateOutlineNormalsPlugin, OutlinePlugin};
 
 use bevy::{
     prelude::*,
@@ -47,8 +46,11 @@ fn main() {
                 bevy::render::diagnostic::RenderDiagnosticsPlugin,
                 iyes_perf_ui::PerfUiPlugin,
             ),
-            OutlinePlugin,
-            AutoGenerateOutlineNormalsPlugin::default(),
+            #[cfg(feature = "outline")]
+            (
+                bevy_mod_outline::OutlinePlugin,
+                bevy_mod_outline::AutoGenerateOutlineNormalsPlugin::default(),
+            ),
         ))
         .insert_resource(bevy_flycam::MovementSettings {
             sensitivity: 0.00012,

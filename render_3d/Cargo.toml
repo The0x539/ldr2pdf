@@ -15,8 +15,8 @@ bytemuck = "1.22.0"
 
 bevy_flycam = "0.15.0"
 bevy_lines.path = "../bevy_lines"
-bevy_mod_outline = { version = "0.9.1", default-features = false, features = ["flood"] }
 
+bevy_mod_outline = { version = "0.9.1", optional = true, default-features = false }
 iyes_perf_ui = { version = "0.4.0", optional = true }
 
 [dependencies.bevy]
@@ -33,3 +33,4 @@ features = [
 [features]
 default = ["overlay"]
 overlay = ["dep:iyes_perf_ui", "bevy/default_font"]
+outline = ["dep:bevy_mod_outline"]
