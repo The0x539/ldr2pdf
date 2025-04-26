@@ -8,7 +8,7 @@ use weldr::SourceMap;
 
 use bevy::{ecs::system::SystemParam, prelude::*, render::camera::Exposure};
 
-use crate::{material::MyMaterial, primitives::Primitives, traverse};
+use crate::{instruction::CurrentStep, material::MyMaterial, primitives::Primitives, traverse};
 
 #[derive(SystemParam)]
 pub struct ModelAssets<'w> {
@@ -19,6 +19,7 @@ pub struct ModelAssets<'w> {
 }
 
 #[derive(Component)]
+#[require(Transform)]
 pub struct ModelRoot;
 
 #[derive(Component)]
@@ -33,14 +34,22 @@ pub struct DisplayRoot;
 #[require(Transform, Visibility)]
 pub struct Model {
     pub name: String,
-    pub parent: Entity,
     pub steps: Vec<Entity>,
+    pub true_parent: Entity,
 }
 
-#[derive(Default, Debug, Component)]
-#[require(Transform, Visibility)]
+#[derive(Debug, Component)]
+#[require(Transform, Visibility, DoublyLinked)]
 pub struct Step {
     pub items: Vec<Entity>,
+    pub index: usize,
+}
+
+// TODO: make this a relationship in bevy 0.16
+#[derive(Debug, Component, Default)]
+pub struct DoublyLinked {
+    pub previous: Option<Entity>,
+    pub next: Option<Entity>,
 }
 
 fn load_model(mut commands: Commands, mut model_assets: ModelAssets) {
@@ -90,15 +99,22 @@ fn load_model(mut commands: Commands, mut model_assets: ModelAssets) {
     let base_transform =
         Mat4::from_rotation_z(std::f32::consts::PI) * Mat4::from_scale(Vec3::splat(0.05));
 
-    commands.spawn((ShadowRealm, Visibility::Hidden));
-
-    let display_root = commands.spawn((
+    let _display_root = commands.spawn((
         DisplayRoot,
         Transform::from_matrix(base_transform),
-        Visibility::Visible,
+        Visibility::Inherited,
     ));
 
-    let model_root = handles.spawn_model(display_root, &mut model_assets, &model);
+    // A hidden entity that serves as the "true parent" of the root model,
+    // at least when a submodel needs to be the child of the display root.
+    // TODO: making it actually Hidden doesn't work properly - probably some kind of cache invalidation issue
+    let shadow_realm = commands.spawn((
+        ShadowRealm,
+        Visibility::Inherited,
+        Transform::from_scale(Vec3::ZERO),
+    ));
+
+    let model_root = handles.spawn_model(shadow_realm, &mut model_assets, &model);
     commands.entity(model_root).insert(ModelRoot);
 }
 
@@ -145,6 +161,44 @@ pub fn reset(
         commands.entity(*root).despawn_recursive();
     }
     load_model(commands.reborrow(), model_assets);
+}
+
+pub fn link_steps(
+    steps: Query<&Step>,
+    models: Query<&Model>,
+    root: Query<&Model, With<ModelRoot>>,
+    mut links: Query<&mut DoublyLinked>,
+    mut current_step: ResMut<CurrentStep>,
+) {
+    let mut sequence: Vec<Entity> = vec![];
+    traverse_hierarchy(&steps, &models, root.single(), &mut sequence);
+
+    for pair in sequence.windows(2) {
+        let a = pair[0];
+        let b = pair[1];
+        links.get_mut(a).unwrap().next = Some(b);
+        links.get_mut(b).unwrap().previous = Some(a);
+    }
+
+    current_step.0 = *sequence.last().unwrap();
+}
+
+fn traverse_hierarchy(
+    steps: &Query<&Step>,
+    models: &Query<&Model>,
+
+    current_model: &Model,
+    sequence: &mut Vec<Entity>,
+) {
+    for &step_id in &current_model.steps {
+        let step = steps.get(step_id).unwrap();
+        for &item_id in &step.items {
+            if let Ok(submodel) = models.get(item_id) {
+                traverse_hierarchy(steps, models, submodel, sequence);
+            }
+        }
+        sequence.push(step_id);
+    }
 }
 
 struct Handles {
@@ -246,12 +300,12 @@ impl Handles {
 
         let mut model_component = Model {
             name: model.name.clone(),
-            parent: parent_id,
             steps: vec![],
+            true_parent: parent_id,
         };
 
-        for step in &model.steps {
-            let step_entity = self.spawn_step(model_entity.reborrow(), assets, step);
+        for (index, step) in model.steps.iter().enumerate() {
+            let step_entity = self.spawn_step(model_entity.reborrow(), assets, step, index);
             model_component.steps.push(step_entity);
         }
 
@@ -276,13 +330,17 @@ impl Handles {
         mut parent: EntityCommands,
         assets: &mut ModelAssets,
         step: &traverse::Step,
+        index: usize,
     ) -> Entity {
         let parent_id = parent.id();
 
         let mut step_entity = parent.commands_mut().spawn_empty();
         step_entity.set_parent(parent_id);
 
-        let mut step_component = Step { items: vec![] };
+        let mut step_component = Step {
+            items: vec![],
+            index,
+        };
 
         for item in &step.items {
             let step_entity = step_entity.reborrow();
