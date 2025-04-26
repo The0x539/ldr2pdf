@@ -1,14 +1,14 @@
 use bevy_lines::prelude::*;
 use ldr2pdf_common::{
-    ldr::{ColorCode, ColorMap, GeometryContext, new_color},
+    ldr::{ColorCode, ColorMap, GeometryContext},
     resolver::Resolver,
 };
 use std::collections::HashMap;
-use weldr::{Command, SourceMap};
+use weldr::SourceMap;
 
 use bevy::{ecs::system::SystemParam, prelude::*, render::camera::Exposure};
 
-use crate::{material::MyMaterial, primitives::Primitives};
+use crate::{material::MyMaterial, primitives::Primitives, traverse};
 
 #[derive(SystemParam)]
 pub struct ModelAssets<'w> {
@@ -38,13 +38,13 @@ fn load_model(mut commands: Commands, mut model_assets: ModelAssets) {
     ctx.transform = weldr::Mat4::from_rotation_z(std::f32::consts::PI)
         * weldr::Mat4::from_scale(weldr::Vec3::splat(0.05));
 
-    let mut model = Model {
+    let mut model = traverse::Model {
         name: file.to_string_lossy().into_owned(),
         transform: Mat4::IDENTITY,
         steps: vec![],
     };
 
-    traverse_design(&source_map, &main_model_name, ctx.clone(), &mut model);
+    traverse::traverse_design(&source_map, &main_model_name, ctx.clone(), &mut model);
 
     let mut handles = Handles {
         part: HashMap::new(),
@@ -141,7 +141,7 @@ struct PartHandles {
 }
 
 impl Handles {
-    fn load_part(&mut self, part: &Part, assets: &mut ModelAssets) {
+    fn load_part(&mut self, part: &traverse::Part, assets: &mut ModelAssets) {
         if self.part.contains_key(&part.id) {
             return;
         }
@@ -175,7 +175,7 @@ impl Handles {
             .insert(part_color, assets.materials.add(material));
     }
 
-    fn spawn_part(&self, parent: &mut ChildBuilder<'_>, part: &Part) {
+    fn spawn_part(&self, parent: &mut ChildBuilder<'_>, part: &traverse::Part) {
         let ph = self.part[&part.id].clone();
 
         let material = MeshMaterial3d(self.material[&part.color].clone());
@@ -207,18 +207,18 @@ impl Handles {
     fn spawn_model(
         &mut self,
         parent: &mut ChildBuilder<'_>,
-        model: &Model,
+        model: &traverse::Model,
         assets: &mut ModelAssets<'_>,
     ) {
         for step in &model.steps {
             for item in &step.items {
                 match item {
-                    StepItem::Part(part) => {
+                    traverse::StepItem::Part(part) => {
                         self.load_part(part, assets);
                         self.load_material(part.color, assets);
                         self.spawn_part(parent, part);
                     }
-                    StepItem::Submodel(submodel) => {
+                    traverse::StepItem::Submodel(submodel) => {
                         let mut entity = parent.spawn((
                             Transform::from_matrix(submodel.transform),
                             InheritedVisibility::VISIBLE,
@@ -229,12 +229,15 @@ impl Handles {
                         });
 
                         #[cfg(feature = "outline")]
-                        if submodel.name == "office level" {
-                            let outline = bevy_mod_outline::OutlineVolume {
-                                visible: true,
-                                width: 4.0,
-                                colour: Color::srgb(1.0, 0.0, 0.0),
-                            };
+                        if submodel.name == "narrow palina" {
+                            let outline = (
+                                bevy_mod_outline::OutlineVolume {
+                                    visible: true,
+                                    width: 4.0,
+                                    colour: Color::srgb(1.0, 0.0, 0.0),
+                                },
+                                bevy_mod_outline::OutlineMode::FloodFlat,
+                            );
                             entity.insert(outline);
                         } else {
                             entity.insert(bevy_mod_outline::InheritOutline);
@@ -242,97 +245,6 @@ impl Handles {
                     }
                 }
             }
-        }
-    }
-}
-
-#[derive(Clone)]
-struct Part {
-    id: String,
-    color: ColorCode,
-    transform: Mat4,
-}
-
-struct Model {
-    #[allow(dead_code)]
-    name: String,
-    steps: Vec<Step>,
-    transform: Mat4,
-}
-
-#[derive(Default)]
-struct Step {
-    items: Vec<StepItem>,
-}
-
-impl Model {
-    fn new_step(&mut self) -> &mut Step {
-        self.steps.push(Default::default());
-        self.steps.last_mut().unwrap()
-    }
-}
-
-impl Step {
-    fn add_part(&mut self, part: Part) {
-        self.items.push(StepItem::Part(part))
-    }
-
-    fn new_submodel(&mut self, name: String, transform: Mat4) -> &mut Model {
-        self.items.push(StepItem::Submodel(Model {
-            name,
-            transform,
-            steps: vec![],
-        }));
-        match self.items.last_mut() {
-            Some(StepItem::Submodel(m)) => m,
-            _ => unreachable!(),
-        }
-    }
-}
-
-enum StepItem {
-    Part(Part),
-    Submodel(Model),
-}
-
-fn traverse_design(
-    source_map: &SourceMap,
-    model_name: &str,
-    ctx: GeometryContext,
-    output: &mut Model,
-) {
-    let Some(model) = source_map.get(model_name) else {
-        panic!("{model_name}");
-    };
-
-    let mut step = output.new_step();
-
-    for cmd in &model.cmds {
-        match cmd {
-            Command::Comment(c) => {
-                if c.text == "STEP" {
-                    step = output.new_step();
-                }
-            }
-            Command::SubFileRef(sfrc) => {
-                let transform = Mat4::from_cols_array(&sfrc.matrix().to_cols_array());
-
-                let child_ctx = ctx.child(sfrc, false);
-                if sfrc.file.ends_with(".dat") {
-                    let part = Part {
-                        id: sfrc.file.clone(),
-                        color: new_color(child_ctx.color, sfrc.color),
-                        transform,
-                    };
-                    step.add_part(part);
-                } else {
-                    let submodel = step.new_submodel(sfrc.file.clone(), transform);
-                    traverse_design(source_map, &sfrc.file, child_ctx, submodel);
-                }
-            }
-            Command::Line(_) | Command::OptLine(_) => panic!("line in {model_name}"),
-            Command::Triangle(_) | Command::Quad(_) => panic!("polygon in {model_name}"),
-            _ => {}
         }
     }
 }

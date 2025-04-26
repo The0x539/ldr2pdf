@@ -12,6 +12,7 @@ use bevy::{
 mod material;
 mod primitives;
 mod setup;
+mod traverse;
 mod watch;
 
 // TODO: put this in bevy state properly
