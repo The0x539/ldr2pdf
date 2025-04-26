@@ -21,10 +21,19 @@ pub struct ModelAssets<'w> {
 #[derive(Component)]
 pub struct ModelRoot;
 
-#[derive(Default, Debug, Component)]
+#[derive(Component)]
+#[require(Transform, Visibility)]
+pub struct ShadowRealm;
+
+#[derive(Component)]
+#[require(Transform, Visibility)]
+pub struct DisplayRoot;
+
+#[derive(Debug, Component)]
 #[require(Transform, Visibility)]
 pub struct Model {
     pub name: String,
+    pub parent: Entity,
     pub steps: Vec<Entity>,
 }
 
@@ -81,12 +90,16 @@ fn load_model(mut commands: Commands, mut model_assets: ModelAssets) {
     let base_transform =
         Mat4::from_rotation_z(std::f32::consts::PI) * Mat4::from_scale(Vec3::splat(0.05));
 
-    let mut root_model_entity = commands.spawn((Transform::from_matrix(base_transform), ModelRoot));
-    let mut root_model_component = Model::default();
-    root_model_entity.with_children(|root| {
-        root_model_component = handles.spawn_model(root, &model, &mut model_assets);
-    });
-    root_model_entity.insert(root_model_component);
+    commands.spawn((ShadowRealm, Visibility::Hidden));
+
+    let display_root = commands.spawn((
+        DisplayRoot,
+        Transform::from_matrix(base_transform),
+        Visibility::Visible,
+    ));
+
+    let model_root = handles.spawn_model(display_root, &mut model_assets, &model);
+    commands.entity(model_root).insert(ModelRoot);
 }
 
 fn initial_setup(mut commands: Commands, mut ambient_light: ResMut<AmbientLight>) {
@@ -185,19 +198,22 @@ impl Handles {
             .insert(part_color, assets.materials.add(material));
     }
 
-    fn spawn_part(&self, parent: &mut ChildBuilder<'_>, part: &traverse::Part) -> Entity {
+    fn spawn_part(&self, mut parent: EntityCommands, part: &traverse::Part) -> Entity {
         let ph = self.part[&part.id].clone();
 
         let material = MeshMaterial3d(self.material[&part.color].clone());
 
         let transform = Transform::from_matrix(part.transform);
 
-        let mut entity = parent.spawn((Mesh3d(ph.mesh), material.clone(), transform));
+        let bundle = (Mesh3d(ph.mesh), material.clone(), transform);
+        let parent_id = parent.id();
+        let mut part_entity = parent.commands_mut().spawn(bundle);
+        part_entity.set_parent(parent_id);
 
         #[cfg(feature = "outline")]
-        entity.insert(bevy_mod_outline::InheritOutline);
+        part_entity.insert(bevy_mod_outline::InheritOutline);
 
-        entity.with_children(|c| {
+        part_entity.with_children(|c| {
             c.spawn(PolylineBundle {
                 polyline: PolylineHandle(ph.line),
                 material: self.line_material.clone(),
@@ -213,74 +229,81 @@ impl Handles {
             }
         });
 
-        entity.id()
+        part_entity.id()
     }
 
     fn spawn_model(
         &mut self,
-        parent_model: &mut ChildBuilder,
-        model: &traverse::Model,
+        mut parent: EntityCommands,
         assets: &mut ModelAssets,
-    ) -> Model {
-        let mut model_component = Model::default();
-        model_component.name = model.name.clone();
+        model: &traverse::Model,
+    ) -> Entity {
+        let parent_id = parent.id();
+
+        let transform = Transform::from_matrix(model.transform);
+        let mut model_entity = parent.commands_mut().spawn(transform);
+        model_entity.set_parent(parent_id);
+
+        let mut model_component = Model {
+            name: model.name.clone(),
+            parent: parent_id,
+            steps: vec![],
+        };
 
         for step in &model.steps {
-            let mut step_entity = parent_model.spawn_empty();
-            let mut step_component = Default::default();
-            step_entity.with_children(|parent_step| {
-                step_component = self.spawn_step(parent_step, assets, step);
-            });
-            step_entity.insert(step_component);
-            model_component.steps.push(step_entity.id());
+            let step_entity = self.spawn_step(model_entity.reborrow(), assets, step);
+            model_component.steps.push(step_entity);
         }
 
-        model_component
+        #[cfg(feature = "outline")]
+        if model_component.name == "office level" {
+            let outline = bevy_mod_outline::OutlineVolume {
+                visible: true,
+                width: 4.0,
+                colour: Color::srgb(1.0, 0.0, 0.0),
+            };
+            model_entity.insert(outline);
+        } else {
+            model_entity.insert(bevy_mod_outline::InheritOutline);
+        }
+
+        model_entity.insert(model_component);
+        model_entity.id()
     }
 
     fn spawn_step(
         &mut self,
-        parent_step: &mut ChildBuilder,
+        mut parent: EntityCommands,
         assets: &mut ModelAssets,
         step: &traverse::Step,
-    ) -> Step {
-        let mut step_component = Step::default();
+    ) -> Entity {
+        let parent_id = parent.id();
+
+        let mut step_entity = parent.commands_mut().spawn_empty();
+        step_entity.set_parent(parent_id);
+
+        let mut step_component = Step { items: vec![] };
 
         for item in &step.items {
+            let step_entity = step_entity.reborrow();
             match item {
                 traverse::StepItem::Part(part) => {
                     self.load_part(part, assets);
                     self.load_material(part.color, assets);
-                    let part_entity = self.spawn_part(parent_step, part);
+                    let part_entity = self.spawn_part(step_entity, part);
                     step_component.items.push(part_entity);
                 }
                 traverse::StepItem::Submodel(submodel) => {
-                    let mut model_entity =
-                        parent_step.spawn(Transform::from_matrix(submodel.transform));
-
-                    let mut model_component = Default::default();
-                    model_entity.with_children(|parent_model| {
-                        model_component = self.spawn_model(parent_model, submodel, assets);
-                    });
-                    model_entity.insert(model_component);
-
-                    #[cfg(feature = "outline")]
-                    if submodel.name == "office level" {
-                        let outline = bevy_mod_outline::OutlineVolume {
-                            visible: true,
-                            width: 4.0,
-                            colour: Color::srgb(1.0, 0.0, 0.0),
-                        };
-                        model_entity.insert(outline);
-                    } else {
-                        model_entity.insert(bevy_mod_outline::InheritOutline);
-                    }
-
-                    step_component.items.push(model_entity.id());
+                    let model_entity = self.spawn_model(step_entity, assets, submodel);
+                    step_component.items.push(model_entity);
                 }
             }
         }
 
-        step_component
+        #[cfg(feature = "outline")]
+        step_entity.insert(bevy_mod_outline::InheritOutline);
+
+        step_entity.insert(step_component);
+        step_entity.id()
     }
 }
