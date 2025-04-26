@@ -22,16 +22,16 @@ pub struct ModelAssets<'w> {
 pub struct ModelRoot;
 
 #[derive(Default, Debug, Component)]
-#[require(InheritedVisibility, Transform)]
+#[require(Transform, Visibility)]
 pub struct Model {
-    name: String,
-    steps: Vec<Entity>,
+    pub name: String,
+    pub steps: Vec<Entity>,
 }
 
 #[derive(Default, Debug, Component)]
-#[require(InheritedVisibility, Transform)]
+#[require(Transform, Visibility)]
 pub struct Step {
-    items: Vec<Entity>,
+    pub items: Vec<Entity>,
 }
 
 fn load_model(mut commands: Commands, mut model_assets: ModelAssets) {
@@ -81,15 +81,12 @@ fn load_model(mut commands: Commands, mut model_assets: ModelAssets) {
     let base_transform =
         Mat4::from_rotation_z(std::f32::consts::PI) * Mat4::from_scale(Vec3::splat(0.05));
 
-    commands
-        .spawn((
-            Transform::from_matrix(base_transform),
-            InheritedVisibility::VISIBLE,
-            ModelRoot,
-        ))
-        .with_children(|root| {
-            handles.spawn_model(root, &model, &mut model_assets);
-        });
+    let mut root_model_entity = commands.spawn((Transform::from_matrix(base_transform), ModelRoot));
+    let mut root_model_component = Model::default();
+    root_model_entity.with_children(|root| {
+        root_model_component = handles.spawn_model(root, &model, &mut model_assets);
+    });
+    root_model_entity.insert(root_model_component);
 }
 
 fn initial_setup(mut commands: Commands, mut ambient_light: ResMut<AmbientLight>) {
@@ -109,7 +106,7 @@ fn initial_setup(mut commands: Commands, mut ambient_light: ResMut<AmbientLight>
             ..default()
         },
         Exposure::INDOOR,
-        Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(90.0, 50.0, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
         bevy_flycam::FlyCam,
     ));
 
@@ -229,7 +226,7 @@ impl Handles {
         model_component.name = model.name.clone();
 
         for step in &model.steps {
-            let mut step_entity = parent_model.spawn((Transform::IDENTITY,));
+            let mut step_entity = parent_model.spawn_empty();
             let mut step_component = Default::default();
             step_entity.with_children(|parent_step| {
                 step_component = self.spawn_step(parent_step, assets, step);
@@ -262,11 +259,9 @@ impl Handles {
                         parent_step.spawn(Transform::from_matrix(submodel.transform));
 
                     let mut model_component = Default::default();
-
                     model_entity.with_children(|parent_model| {
                         model_component = self.spawn_model(parent_model, submodel, assets);
                     });
-
                     model_entity.insert(model_component);
 
                     #[cfg(feature = "outline")]

@@ -9,6 +9,7 @@ use bevy::{
     },
 };
 
+mod instruction;
 mod material;
 mod primitives;
 mod setup;
@@ -62,5 +63,7 @@ fn main() {
             Update,
             setup::reset.run_if(watch::file_touched(&model_path())),
         )
+        .init_resource::<instruction::KeyBindings>()
+        .add_systems(Update, instruction::update)
         .run();
 }
