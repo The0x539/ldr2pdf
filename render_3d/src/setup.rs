@@ -21,6 +21,19 @@ pub struct ModelAssets<'w> {
 #[derive(Component)]
 pub struct ModelRoot;
 
+#[derive(Default, Debug, Component)]
+#[require(InheritedVisibility, Transform)]
+pub struct Model {
+    name: String,
+    steps: Vec<Entity>,
+}
+
+#[derive(Default, Debug, Component)]
+#[require(InheritedVisibility, Transform)]
+pub struct Step {
+    items: Vec<Entity>,
+}
+
 fn load_model(mut commands: Commands, mut model_assets: ModelAssets) {
     let path = crate::model_path();
     if !path.exists() {
@@ -175,7 +188,7 @@ impl Handles {
             .insert(part_color, assets.materials.add(material));
     }
 
-    fn spawn_part(&self, parent: &mut ChildBuilder<'_>, part: &traverse::Part) {
+    fn spawn_part(&self, parent: &mut ChildBuilder<'_>, part: &traverse::Part) -> Entity {
         let ph = self.part[&part.id].clone();
 
         let material = MeshMaterial3d(self.material[&part.color].clone());
@@ -202,49 +215,77 @@ impl Handles {
                 });
             }
         });
+
+        entity.id()
     }
 
     fn spawn_model(
         &mut self,
-        parent: &mut ChildBuilder<'_>,
+        parent_model: &mut ChildBuilder,
         model: &traverse::Model,
-        assets: &mut ModelAssets<'_>,
-    ) {
+        assets: &mut ModelAssets,
+    ) -> Model {
+        let mut model_component = Model::default();
+        model_component.name = model.name.clone();
+
         for step in &model.steps {
-            for item in &step.items {
-                match item {
-                    traverse::StepItem::Part(part) => {
-                        self.load_part(part, assets);
-                        self.load_material(part.color, assets);
-                        self.spawn_part(parent, part);
-                    }
-                    traverse::StepItem::Submodel(submodel) => {
-                        let mut entity = parent.spawn((
-                            Transform::from_matrix(submodel.transform),
-                            InheritedVisibility::VISIBLE,
-                        ));
+            let mut step_entity = parent_model.spawn((Transform::IDENTITY,));
+            let mut step_component = Default::default();
+            step_entity.with_children(|parent_step| {
+                step_component = self.spawn_step(parent_step, assets, step);
+            });
+            step_entity.insert(step_component);
+            model_component.steps.push(step_entity.id());
+        }
 
-                        entity.with_children(|subparent| {
-                            self.spawn_model(subparent, submodel, assets)
-                        });
+        model_component
+    }
 
-                        #[cfg(feature = "outline")]
-                        if submodel.name == "narrow palina" {
-                            let outline = (
-                                bevy_mod_outline::OutlineVolume {
-                                    visible: true,
-                                    width: 4.0,
-                                    colour: Color::srgb(1.0, 0.0, 0.0),
-                                },
-                                bevy_mod_outline::OutlineMode::FloodFlat,
-                            );
-                            entity.insert(outline);
-                        } else {
-                            entity.insert(bevy_mod_outline::InheritOutline);
-                        }
+    fn spawn_step(
+        &mut self,
+        parent_step: &mut ChildBuilder,
+        assets: &mut ModelAssets,
+        step: &traverse::Step,
+    ) -> Step {
+        let mut step_component = Step::default();
+
+        for item in &step.items {
+            match item {
+                traverse::StepItem::Part(part) => {
+                    self.load_part(part, assets);
+                    self.load_material(part.color, assets);
+                    let part_entity = self.spawn_part(parent_step, part);
+                    step_component.items.push(part_entity);
+                }
+                traverse::StepItem::Submodel(submodel) => {
+                    let mut model_entity =
+                        parent_step.spawn(Transform::from_matrix(submodel.transform));
+
+                    let mut model_component = Default::default();
+
+                    model_entity.with_children(|parent_model| {
+                        model_component = self.spawn_model(parent_model, submodel, assets);
+                    });
+
+                    model_entity.insert(model_component);
+
+                    #[cfg(feature = "outline")]
+                    if submodel.name == "office level" {
+                        let outline = bevy_mod_outline::OutlineVolume {
+                            visible: true,
+                            width: 4.0,
+                            colour: Color::srgb(1.0, 0.0, 0.0),
+                        };
+                        model_entity.insert(outline);
+                    } else {
+                        model_entity.insert(bevy_mod_outline::InheritOutline);
                     }
+
+                    step_component.items.push(model_entity.id());
                 }
             }
         }
+
+        step_component
     }
 }
