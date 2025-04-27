@@ -187,11 +187,17 @@ fn traverse_hierarchy(
     current_model: &Model,
     sequence: &mut Vec<Entity>,
 ) {
+    // to avoid including multiple copies of instructions for the same model in the same set
+    let mut seen = HashSet::new();
+
     for &step_id in &current_model.steps {
+        seen.clear();
         let step = steps.get(step_id).unwrap();
         for &item_id in &step.items {
             if let Ok(submodel) = models.get(item_id) {
-                traverse_hierarchy(steps, models, submodel, sequence);
+                if seen.insert(&submodel.name) {
+                    traverse_hierarchy(steps, models, submodel, sequence);
+                }
             }
         }
         sequence.push(step_id);
