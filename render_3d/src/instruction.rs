@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::setup::{DoublyLinked, Model, Step};
+use crate::setup::{DoublyLinked, Model, MyOverlay, Step};
 
 #[derive(Resource)]
 pub struct KeyBindings {
@@ -42,6 +42,8 @@ pub fn update(
     mut vis: Query<&mut Visibility>,
     mut current_step: ResMut<CurrentStep>,
     #[cfg(feature = "outline")] children: Query<&Children, Or<(With<Model>, With<Step>)>>,
+    #[cfg(feature = "overlay")] parents: Query<&Parent, Or<(With<Model>, With<Step>)>>,
+    #[cfg(feature = "overlay")] mut text: Single<&mut Text, With<MyOverlay>>,
 ) {
     // borrowck doesn't like my usage pattern with the smart pointer
     let current_step = &mut *current_step;
@@ -104,6 +106,20 @@ pub fn update(
         for child in children.iter_descendants(*step_id) {
             commands.entity(child).insert(InheritOutline);
         }
+    }
+
+    #[cfg(feature = "overlay")]
+    {
+        let mut lines = vec![format!("step {}", show_up_to + 1)];
+        for id in parents.iter_ancestors(*step_id) {
+            if let Ok(model) = models.get(id) {
+                lines.push(model.name.clone());
+            } else if let Ok((step, _)) = steps.get(id) {
+                lines.push(format!("step {}", step.index + 1));
+            }
+        }
+        lines.reverse();
+        text.0 = lines.join("\n");
     }
 
     let model = models.get(model_id).unwrap();

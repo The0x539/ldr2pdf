@@ -29,7 +29,7 @@ pub struct ShadowRealm;
 #[derive(Debug, Component)]
 #[require(Transform, Visibility)]
 pub struct Model {
-    // pub name: String,
+    pub name: String,
     pub steps: Vec<Entity>,
     // pub true_parent: Entity,
 }
@@ -47,6 +47,9 @@ pub struct DoublyLinked {
     pub previous: Option<Entity>,
     pub next: Option<Entity>,
 }
+
+#[derive(Component)]
+pub struct MyOverlay;
 
 fn load_model(mut commands: Commands, mut model_assets: ModelAssets) {
     let path = crate::model_path();
@@ -131,6 +134,9 @@ fn initial_setup(mut commands: Commands, mut ambient_light: ResMut<AmbientLight>
 
     #[cfg(feature = "overlay")]
     commands.spawn(iyes_perf_ui::entries::PerfUiAllEntries::default());
+
+    #[cfg(feature = "overlay")]
+    commands.spawn((Text::new(""), MyOverlay));
 }
 
 pub fn setup(
@@ -290,7 +296,7 @@ impl Handles {
         model_entity.set_parent(parent_id);
 
         let mut model_component = Model {
-            // name: model.name.clone(),
+            name: model.name.clone(),
             steps: vec![],
             // true_parent: parent_id,
         };
