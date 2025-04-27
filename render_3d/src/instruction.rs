@@ -18,11 +18,17 @@ impl Default for KeyBindings {
 }
 
 #[derive(Resource)]
-pub struct CurrentStep(pub Entity);
+pub struct CurrentStep {
+    pub(crate) id: Entity,
+    pub(crate) fresh: bool,
+}
 
 impl FromWorld for CurrentStep {
     fn from_world(_world: &mut World) -> Self {
-        Self(Entity::PLACEHOLDER)
+        Self {
+            id: Entity::PLACEHOLDER,
+            fresh: true,
+        }
     }
 }
 
@@ -35,9 +41,12 @@ pub fn update(
     step_sequence: Query<&DoublyLinked>,
     mut vis: Query<&mut Visibility>,
     mut current_step: ResMut<CurrentStep>,
-    #[cfg(feature = "outline")] child_steps: Query<&Children, With<Step>>,
+    #[cfg(feature = "outline")] children: Query<&Children, Or<(With<Model>, With<Step>)>>,
 ) {
-    let step_id = &mut current_step.0;
+    // borrowck doesn't like my usage pattern with the smart pointer
+    let current_step = &mut *current_step;
+
+    let step_id = &mut current_step.id;
     let old_step_id = *step_id;
 
     if keys.just_pressed(key_bindings.previous_step) || keys.pressed(KeyCode::KeyH) {
@@ -54,9 +63,11 @@ pub fn update(
         }
     }
 
-    if *step_id == old_step_id {
+    if *step_id == old_step_id && !current_step.fresh {
         return;
     }
+
+    current_step.fresh = false;
 
     let old_model_id = steps.get(old_step_id).unwrap().1.get();
     let model_id = steps.get(*step_id).unwrap().1.get();
@@ -79,7 +90,7 @@ pub fn update(
         type AnyOutline = (OutlineVolume, InheritOutline, ComputedOutline);
 
         commands.entity(old_step_id).remove::<AnyOutline>();
-        for child in child_steps.iter_descendants(old_step_id) {
+        for child in children.iter_descendants(old_step_id) {
             commands.entity(child).remove::<AnyOutline>();
         }
 
@@ -90,7 +101,7 @@ pub fn update(
         };
 
         commands.entity(*step_id).insert(outline);
-        for child in child_steps.iter_descendants(*step_id) {
+        for child in children.iter_descendants(*step_id) {
             commands.entity(child).insert(InheritOutline);
         }
     }
@@ -99,7 +110,11 @@ pub fn update(
 
     for (i, step_id) in model.steps.iter().enumerate() {
         *vis.get_mut(*step_id).unwrap() = if i <= show_up_to {
-            Visibility::Visible
+            if FOCUS_SUBMODELS {
+                Visibility::Inherited
+            } else {
+                Visibility::Visible
+            }
         } else {
             Visibility::Hidden
         };

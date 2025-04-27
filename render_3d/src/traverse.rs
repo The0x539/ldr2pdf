@@ -63,11 +63,20 @@ pub(crate) fn traverse_design(
 
     let mut step = output.new_step();
 
+    // LDraw puts `0 STEP` at the *end* of each step,
+    // so we don't know that there's actually another step after until we see something afterwards.
+    // Sometimes a designer may intentionally end a step sequence with a blank step,
+    // in which case this approach leaves that untouched,
+    // as opposed to the more obvious approach of just removing a trailing blank step.
+    let mut step_is_real = false;
+
     for cmd in &model.cmds {
+        step_is_real = true;
         match cmd {
             Command::Comment(c) => {
                 if c.text == "STEP" {
                     step = output.new_step();
+                    step_is_real = false;
                 }
             }
             Command::SubFileRef(sfrc) => {
@@ -90,5 +99,10 @@ pub(crate) fn traverse_design(
             Command::Triangle(_) | Command::Quad(_) => panic!("polygon in {model_name}"),
             _ => {}
         }
+    }
+
+    if !step_is_real {
+        assert!(step.items.is_empty());
+        output.steps.pop();
     }
 }

@@ -170,7 +170,8 @@ pub fn link_steps(
         links.get_mut(b).unwrap().previous = Some(a);
     }
 
-    current_step.0 = sequence[0];
+    current_step.id = sequence[0];
+    current_step.fresh = true;
 }
 
 fn traverse_hierarchy(
@@ -338,9 +339,6 @@ impl Handles {
                 }
             }
         }
-
-        // #[cfg(feature = "outline")]
-        // step_entity.insert(bevy_mod_outline::InheritOutline);
 
         step_entity.insert(step_component);
         step_entity.id()
