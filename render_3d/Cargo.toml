@@ -31,6 +31,6 @@ features = [
 ]
 
 [features]
-default = ["overlay"]
+default = ["overlay", "outline"]
 overlay = ["dep:iyes_perf_ui", "bevy/default_font"]
 outline = ["dep:bevy_mod_outline"]

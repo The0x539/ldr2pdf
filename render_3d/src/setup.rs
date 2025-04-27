@@ -26,16 +26,12 @@ pub struct ModelRoot;
 #[require(Transform, Visibility)]
 pub struct ShadowRealm;
 
-#[derive(Component)]
-#[require(Transform, Visibility)]
-pub struct DisplayRoot;
-
 #[derive(Debug, Component)]
 #[require(Transform, Visibility)]
 pub struct Model {
-    pub name: String,
+    // pub name: String,
     pub steps: Vec<Entity>,
-    pub true_parent: Entity,
+    // pub true_parent: Entity,
 }
 
 #[derive(Debug, Component)]
@@ -99,19 +95,13 @@ fn load_model(mut commands: Commands, mut model_assets: ModelAssets) {
     let base_transform =
         Mat4::from_rotation_z(std::f32::consts::PI) * Mat4::from_scale(Vec3::splat(0.05));
 
-    let _display_root = commands.spawn((
-        DisplayRoot,
-        Transform::from_matrix(base_transform),
-        Visibility::Inherited,
-    ));
-
-    // A hidden entity that serves as the "true parent" of the root model,
-    // at least when a submodel needs to be the child of the display root.
-    // TODO: making it actually Hidden doesn't work properly - probably some kind of cache invalidation issue
+    // A hidden entity that serves as the root of the hierarchy,
+    // so that descendants must opt IN to being visible.
+    // Originally intended as a "holding area" for whatever isn't the current submodel.
     let shadow_realm = commands.spawn((
         ShadowRealm,
-        Visibility::Inherited,
-        Transform::from_scale(Vec3::ZERO),
+        Visibility::Hidden,
+        Transform::from_matrix(base_transform),
     ));
 
     let model_root = handles.spawn_model(shadow_realm, &mut model_assets, &model);
@@ -180,7 +170,7 @@ pub fn link_steps(
         links.get_mut(b).unwrap().previous = Some(a);
     }
 
-    current_step.0 = *sequence.last().unwrap();
+    current_step.0 = sequence[0];
 }
 
 fn traverse_hierarchy(
@@ -299,9 +289,9 @@ impl Handles {
         model_entity.set_parent(parent_id);
 
         let mut model_component = Model {
-            name: model.name.clone(),
+            // name: model.name.clone(),
             steps: vec![],
-            true_parent: parent_id,
+            // true_parent: parent_id,
         };
 
         for (index, step) in model.steps.iter().enumerate() {
@@ -310,16 +300,7 @@ impl Handles {
         }
 
         #[cfg(feature = "outline")]
-        if model_component.name == "office level" {
-            let outline = bevy_mod_outline::OutlineVolume {
-                visible: true,
-                width: 4.0,
-                colour: Color::srgb(1.0, 0.0, 0.0),
-            };
-            model_entity.insert(outline);
-        } else {
-            model_entity.insert(bevy_mod_outline::InheritOutline);
-        }
+        model_entity.insert(bevy_mod_outline::InheritOutline);
 
         model_entity.insert(model_component);
         model_entity.id()
@@ -358,8 +339,8 @@ impl Handles {
             }
         }
 
-        #[cfg(feature = "outline")]
-        step_entity.insert(bevy_mod_outline::InheritOutline);
+        // #[cfg(feature = "outline")]
+        // step_entity.insert(bevy_mod_outline::InheritOutline);
 
         step_entity.insert(step_component);
         step_entity.id()
