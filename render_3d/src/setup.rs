@@ -3,7 +3,7 @@ use ldr2pdf_common::{
     ldr::{ColorCode, ColorMap, GeometryContext},
     resolver::Resolver,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use weldr::SourceMap;
 
 use bevy::{ecs::system::SystemParam, prelude::*, render::camera::Exposure};
