@@ -2,6 +2,7 @@ use std::{
     fs::File,
     io::Read,
     path::{Path, PathBuf},
+    sync::LazyLock,
 };
 
 use weldr::FileRefResolver;
@@ -40,6 +41,63 @@ impl Resolver {
     }
 }
 
+fn program_files() -> Option<PathBuf> {
+    if cfg!(target_os = "windows") {
+        Some("C:/Program Files".into())
+    } else if cfg!(target_os = "macos") {
+        Some("/Applications".into())
+    } else if cfg!(target_os = "linux") {
+        let wine_prefix = std::env::var_os("WINE_PREFIX")?;
+        Some(Path::new(&wine_prefix).join("drive_c/Program Files"))
+    } else {
+        None
+    }
+}
+
+fn ldraw_base_dirs() -> Vec<PathBuf> {
+    // TODO: Allow the user to point to additional paths to allow non-Studio libraries
+
+    let mut v = vec![];
+
+    if let Some(program_files) = program_files() {
+        for channel in ["Studio 2.0 EarlyAccess", "Studio 2.0"] {
+            let ldraw = program_files.join(channel).join("ldraw");
+            v.push(ldraw.clone());
+            v.push(ldraw.join("UnOfficial"));
+        }
+    }
+
+    if let Some(data_local) = dirs::data_local_dir() {
+        let studio_data = data_local.join("Stud.io");
+        v.push(studio_data.join("CustomParts"));
+
+        if let Ok(iter) = std::fs::read_dir(studio_data.join("NewParts/Updates")) {
+            for entry in iter {
+                let update_dir = entry.unwrap().path();
+                if update_dir.ends_with("__MACOSX") {
+                    continue;
+                }
+                v.push(update_dir);
+            }
+        }
+    }
+
+    v.retain(|p| p.exists());
+    v
+}
+
+fn ldraw_dirs() -> Vec<PathBuf> {
+    // primitive quality order: normal, low, high, very low
+    let suffixes = ["parts", "p", "p/8", "p/48", "p/4"];
+    ldraw_base_dirs()
+        .into_iter()
+        .flat_map(|base| suffixes.map(|suffix| base.join(suffix)))
+        .filter(|p| p.exists())
+        .collect()
+}
+
+const LDRAW_DIRS: LazyLock<Vec<PathBuf>> = LazyLock::new(ldraw_dirs);
+
 impl FileRefResolver for Resolver {
     fn resolve<P: AsRef<Path>>(&self, filename: P) -> Result<Vec<u8>, weldr::ResolveError> {
         let filename = filename.as_ref();
@@ -47,32 +105,17 @@ impl FileRefResolver for Resolver {
             return Ok(self.root.clone());
         }
 
-        let ldraw = Path::new("C:/Program Files/Studio 2.0/ldraw");
-        let custom = dirs::data_local_dir().unwrap().join("Stud.io/CustomParts");
-
-        let search_dirs = [
-            custom.join("parts"),
-            ldraw.join("parts"),
-            // primitive quality order: normal, low, high, very low
-            ldraw.join("p"),
-            ldraw.join("p/8"),
-            ldraw.join("p/48"),
-            ldraw.join("p/4"),
-            ldraw.join("UnOfficial/parts"),
-            ldraw.join("UnOfficial/p"),
-            ldraw.join("UnOfficial/p/8"),
-            ldraw.join("UnOfficial/p/48"),
-            ldraw.join("UnOfficial/p/4"),
-        ];
-
-        let mut paths = search_dirs
+        let mut paths = LDRAW_DIRS
             .iter()
             .map(|d| d.join(&filename))
             .collect::<Vec<_>>();
 
+        // Some submodel references specify a detail level, but weldr treats it as a relative path,
+        // so this breaks if p/48/foo.dat tries to ask for p/48/bar.dat etc.
+        // Just strip the prefix and search everywhere, I guess.
         for prefix in [r"48/", r"8/", r"4/"] {
             if let Some(filename) = filename.to_str().and_then(|s| s.strip_prefix(prefix)) {
-                paths.extend(search_dirs.iter().map(|d| d.join(filename)));
+                paths.extend(LDRAW_DIRS.iter().map(|d| d.join(filename)));
             }
         }
 
