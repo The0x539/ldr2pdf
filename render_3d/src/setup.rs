@@ -176,6 +176,8 @@ pub fn link_steps(
         links.get_mut(b).unwrap().previous = Some(a);
     }
 
+    // TODO: figure out how to remember step position across reloads of a model.
+    // current naive attempts do not behave properly with respect to the visibility toggling of parts and submodels
     current_step.id = sequence[0];
     current_step.fresh = true;
 }

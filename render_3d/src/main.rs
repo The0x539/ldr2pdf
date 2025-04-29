@@ -61,7 +61,9 @@ fn main() {
         .add_systems(Startup, (setup::setup, setup::link_steps).chain())
         .add_systems(
             Update,
-            (setup::reset, setup::link_steps).run_if(watch::file_touched(&model_path())),
+            (setup::reset, setup::link_steps)
+                .chain()
+                .run_if(watch::file_touched(&model_path())),
         )
         .init_resource::<instruction::KeyBindings>()
         .init_resource::<instruction::CurrentStep>()
