@@ -1,3 +1,4 @@
+use bevy_blendy_cameras::{FlyCameraController, OrbitCameraController};
 use bevy_lines::prelude::*;
 use ldr2pdf_common::{
     ldr::{ColorCode, ColorMap, GeometryContext},
@@ -129,7 +130,25 @@ fn initial_setup(mut commands: Commands, mut ambient_light: ResMut<AmbientLight>
         },
         Exposure::INDOOR,
         Transform::from_xyz(90.0, 50.0, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
-        bevy_flycam::FlyCam,
+        OrbitCameraController {
+            button_orbit: MouseButton::Right,
+            button_pan: MouseButton::Middle,
+            modifier_pan: None,
+            ..default()
+        },
+        FlyCameraController {
+            key_move_forward: KeyCode::KeyW,
+            key_move_backward: KeyCode::KeyS,
+            key_move_left: KeyCode::KeyA,
+            key_move_right: KeyCode::KeyD,
+            key_move_up: KeyCode::Space,
+            key_move_down: KeyCode::ShiftLeft,
+            button_rotate: MouseButton::Right,
+            grab_cursor: true,
+            is_enabled: false,
+            speed: 20.0,
+            ..default()
+        },
     ));
 
     #[cfg(feature = "overlay")]

@@ -1,4 +1,3 @@
-use bevy_flycam::NoCameraPlayerPlugin;
 use bevy_lines::prelude::*;
 
 use bevy::{
@@ -35,7 +34,7 @@ fn main() {
                 ..default()
             }),
             PolylinePlugin,
-            NoCameraPlayerPlugin,
+            bevy_blendy_cameras::BlendyCamerasPlugin,
             MaterialPlugin::<material::MyMaterial> {
                 prepass_enabled: false,
                 shadows_enabled: false,
@@ -54,10 +53,6 @@ fn main() {
                 bevy_mod_outline::AutoGenerateOutlineNormalsPlugin::default(),
             ),
         ))
-        .insert_resource(bevy_flycam::MovementSettings {
-            sensitivity: 0.00012,
-            speed: 15.0,
-        })
         .add_systems(Startup, (setup::setup, setup::link_steps).chain())
         .add_systems(
             Update,
@@ -68,5 +63,6 @@ fn main() {
         .init_resource::<instruction::KeyBindings>()
         .init_resource::<instruction::CurrentStep>()
         .add_systems(Update, instruction::update)
+        .add_systems(Update, instruction::camera_control)
         .run();
 }
