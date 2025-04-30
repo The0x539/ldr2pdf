@@ -8,8 +8,9 @@ use crate::setup::{DoublyLinked, Model, MyOverlay, Step};
 pub fn instruction_plugin(app: &mut App) {
     app.init_resource::<KeyBindings>()
         .init_resource::<CurrentStep>()
-        .add_systems(Update, update)
-        .add_systems(Update, camera_control);
+        .add_systems(Update, input);
+
+    app.world_mut().add_observer(change_step);
 }
 
 #[derive(Resource)]
@@ -32,23 +33,59 @@ impl Default for KeyBindings {
 #[derive(Resource)]
 pub struct CurrentStep {
     pub(crate) id: Entity,
-    pub(crate) fresh: bool,
 }
 
 impl FromWorld for CurrentStep {
     fn from_world(_world: &mut World) -> Self {
         Self {
             id: Entity::PLACEHOLDER,
-            fresh: true,
         }
     }
 }
 
-fn update(
+#[derive(Event)]
+pub enum ChangeStep {
+    Next,
+    Previous,
+    Refresh,
+}
+
+fn input(
     mut commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     key_bindings: Res<KeyBindings>,
+    camera: Single<(Entity, &OrbitCameraController, &FlyCameraController)>,
+    mut fly_event: EventWriter<SwitchToFlyController>,
+    mut orbit_event: EventWriter<SwitchToOrbitController>,
+) {
+    if keys.just_pressed(key_bindings.previous_step)
+        || keys.pressed(KeyCode::KeyH)
+        || mouse.just_pressed(MouseButton::Back)
+    {
+        commands.trigger(ChangeStep::Previous);
+    }
+
+    if keys.just_pressed(key_bindings.next_step)
+        || keys.pressed(KeyCode::KeyL)
+        || mouse.just_pressed(MouseButton::Forward)
+    {
+        commands.trigger(ChangeStep::Next);
+    }
+
+    if keys.just_pressed(key_bindings.toggle_camera_mode) {
+        let (camera_entity, orbit, _fly) = *camera;
+        if orbit.is_enabled {
+            fly_event.send(SwitchToFlyController { camera_entity });
+        } else {
+            orbit_event.send(SwitchToOrbitController { camera_entity });
+        }
+    }
+}
+
+fn change_step(
+    trigger: Trigger<ChangeStep>,
+    mut commands: Commands,
     models: Query<&Model>,
     steps: Query<(&Step, &Parent)>,
     step_sequence: Query<&DoublyLinked>,
@@ -64,31 +101,21 @@ fn update(
     let step_id = &mut current_step.id;
     let old_step_id = *step_id;
 
-    if keys.just_pressed(key_bindings.previous_step)
-        || keys.pressed(KeyCode::KeyH)
-        || mouse.just_pressed(MouseButton::Back)
-    {
-        if let Some(previous) = step_sequence.get(*step_id).unwrap().previous {
-            *vis.get_mut(*step_id).unwrap() = Visibility::Hidden;
-            *step_id = previous;
+    match trigger.event() {
+        ChangeStep::Previous => {
+            if let Some(previous) = step_sequence.get(*step_id).unwrap().previous {
+                *vis.get_mut(*step_id).unwrap() = Visibility::Hidden;
+                *step_id = previous;
+            }
         }
-    }
-
-    if keys.just_pressed(key_bindings.next_step)
-        || keys.pressed(KeyCode::KeyL)
-        || mouse.just_pressed(MouseButton::Forward)
-    {
-        if let Some(next) = step_sequence.get(*step_id).unwrap().next {
-            *step_id = next;
-            *vis.get_mut(*step_id).unwrap() = Visibility::Inherited;
+        ChangeStep::Next => {
+            if let Some(next) = step_sequence.get(*step_id).unwrap().next {
+                *step_id = next;
+                *vis.get_mut(*step_id).unwrap() = Visibility::Inherited;
+            }
         }
+        ChangeStep::Refresh => {}
     }
-
-    if *step_id == old_step_id && !current_step.fresh {
-        return;
-    }
-
-    current_step.fresh = false;
 
     let old_model_id = steps.get(old_step_id).unwrap().1.get();
     let model_id = steps.get(*step_id).unwrap().1.get();
@@ -152,29 +179,6 @@ fn update(
             }
         } else {
             Visibility::Hidden
-        };
-    }
-}
-
-fn camera_control(
-    camera: Single<(Entity, &OrbitCameraController, &FlyCameraController)>,
-    keys: Res<ButtonInput<KeyCode>>,
-    key_bindings: Res<KeyBindings>,
-    mut to_fly: EventWriter<SwitchToFlyController>,
-    mut to_orbit: EventWriter<SwitchToOrbitController>,
-) {
-    let (camera_entity, orbit, _fly) = *camera;
-
-    let kjp = keys.get_just_pressed().collect::<Vec<_>>();
-    if !kjp.is_empty() {
-        println!("{kjp:?}");
-    }
-
-    if keys.just_pressed(key_bindings.toggle_camera_mode) {
-        if orbit.is_enabled {
-            to_fly.send(SwitchToFlyController { camera_entity });
-        } else {
-            to_orbit.send(SwitchToOrbitController { camera_entity });
         };
     }
 }

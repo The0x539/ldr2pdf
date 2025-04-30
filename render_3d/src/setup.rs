@@ -183,6 +183,7 @@ fn unload_model(root: Option<Single<Entity, With<ModelRoot>>>, mut commands: Com
 }
 
 fn link_steps(
+    mut commands: Commands,
     steps: Query<&Step>,
     models: Query<&Model>,
     root: Query<&Model, With<ModelRoot>>,
@@ -202,7 +203,7 @@ fn link_steps(
     // TODO: figure out how to remember step position across reloads of a model.
     // current naive attempts do not behave properly with respect to the visibility toggling of parts and submodels
     current_step.id = sequence[0];
-    current_step.fresh = true;
+    commands.trigger(crate::instruction::ChangeStep::Refresh);
 }
 
 fn traverse_hierarchy(
