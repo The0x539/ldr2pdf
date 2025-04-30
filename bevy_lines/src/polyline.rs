@@ -129,13 +129,17 @@ pub fn extract_polylines(
             RenderEntity,
             &InheritedVisibility,
             &ViewVisibility,
-            &GlobalTransform,
-            &PolylineHandle,
-            &PolylineMaterialHandle,
+            Ref<GlobalTransform>,
+            Ref<PolylineHandle>,
+            Ref<PolylineMaterialHandle>,
         )>,
     >,
 ) {
-    let mut values = Vec::with_capacity(*previous_len);
+    // for my use case, it is expected that a "force" update (e.g. changing the transform)
+    // happens infrequently, after which it goes back to "try" updates
+    let mut force_add = Vec::with_capacity(0);
+    let mut try_add = Vec::with_capacity(*previous_len);
+
     for (entity, inherited_visibility, view_visibility, transform, polyline, material) in
         query.iter()
     {
@@ -144,18 +148,25 @@ pub fn extract_polylines(
             continue;
         }
 
+        let changed = transform.is_changed() || polyline.is_changed() || material.is_changed();
+
         let transform = transform.compute_matrix();
-        values.push((
-            entity,
-            (
-                PolylineHandle(polyline.0.clone_weak()),
-                PolylineUniform { transform },
-                PolylineMaterialHandle(material.0.clone_weak()),
-            ),
-        ));
+        let bundle = (
+            PolylineHandle(polyline.0.clone_weak()),
+            PolylineUniform { transform },
+            PolylineMaterialHandle(material.0.clone_weak()),
+        );
+        if changed {
+            force_add.push((entity, bundle));
+        } else {
+            try_add.push((entity, bundle));
+        }
     }
-    *previous_len = values.len();
-    commands.insert_batch_if_new(values);
+
+    *previous_len = force_add.len() + try_add.len();
+
+    commands.insert_batch(force_add);
+    commands.insert_batch_if_new(try_add);
 }
 
 pub fn calculate_bounds(
