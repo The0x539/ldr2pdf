@@ -11,8 +11,26 @@ use bevy::{ecs::system::SystemParam, prelude::*, render::camera::Exposure};
 
 use crate::{instruction::CurrentStep, material::MyMaterial, primitives::Primitives, traverse};
 
+// TODO: put this in bevy state properly
+fn model_path() -> std::path::PathBuf {
+    std::env::args_os()
+        .nth(1)
+        .map(From::from)
+        .unwrap_or_else(|| dirs::document_dir().unwrap().join("lego/aria/HQ.io"))
+}
+
+pub fn setup_plugin(app: &mut App) {
+    let on_startup = (initial_setup, load_model, link_steps).chain();
+    let on_update = (unload_model, load_model, link_steps)
+        .chain()
+        .run_if(crate::watch::file_touched(&model_path()));
+
+    app.add_systems(Startup, on_startup);
+    app.add_systems(Update, on_update);
+}
+
 #[derive(SystemParam)]
-pub struct ModelAssets<'w> {
+struct ModelAssets<'w> {
     meshes: ResMut<'w, Assets<Mesh>>,
     materials: ResMut<'w, Assets<MyMaterial>>,
     lines: ResMut<'w, Assets<Polyline>>,
@@ -53,7 +71,7 @@ pub struct DoublyLinked {
 pub struct MyOverlay;
 
 fn load_model(mut commands: Commands, mut model_assets: ModelAssets) {
-    let path = crate::model_path();
+    let path = model_path();
     if !path.exists() {
         return;
     }
@@ -158,27 +176,13 @@ fn initial_setup(mut commands: Commands, mut ambient_light: ResMut<AmbientLight>
     commands.spawn((Text::new(""), MyOverlay));
 }
 
-pub fn setup(
-    mut commands: Commands,
-    ambient_light: ResMut<AmbientLight>,
-    model_assets: ModelAssets<'_>,
-) {
-    load_model(commands.reborrow(), model_assets);
-    initial_setup(commands.reborrow(), ambient_light);
-}
-
-pub fn reset(
-    root: Option<Single<Entity, With<ModelRoot>>>,
-    mut commands: Commands,
-    model_assets: ModelAssets,
-) {
+fn unload_model(root: Option<Single<Entity, With<ModelRoot>>>, mut commands: Commands) {
     if let Some(root) = root {
         commands.entity(*root).despawn_recursive();
     }
-    load_model(commands.reborrow(), model_assets);
 }
 
-pub fn link_steps(
+fn link_steps(
     steps: Query<&Step>,
     models: Query<&Model>,
     root: Query<&Model, With<ModelRoot>>,

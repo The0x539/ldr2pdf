@@ -5,11 +5,18 @@ use bevy_blendy_cameras::{
 
 use crate::setup::{DoublyLinked, Model, MyOverlay, Step};
 
+pub fn instruction_plugin(app: &mut App) {
+    app.init_resource::<KeyBindings>()
+        .init_resource::<CurrentStep>()
+        .add_systems(Update, update)
+        .add_systems(Update, camera_control);
+}
+
 #[derive(Resource)]
-pub struct KeyBindings {
-    pub previous_step: KeyCode,
-    pub next_step: KeyCode,
-    pub toggle_camera_mode: KeyCode,
+struct KeyBindings {
+    previous_step: KeyCode,
+    next_step: KeyCode,
+    toggle_camera_mode: KeyCode,
 }
 
 impl Default for KeyBindings {
@@ -37,7 +44,7 @@ impl FromWorld for CurrentStep {
     }
 }
 
-pub fn update(
+fn update(
     mut commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
@@ -149,7 +156,7 @@ pub fn update(
     }
 }
 
-pub fn camera_control(
+fn camera_control(
     camera: Single<(Entity, &OrbitCameraController, &FlyCameraController)>,
     keys: Res<ButtonInput<KeyCode>>,
     key_bindings: Res<KeyBindings>,

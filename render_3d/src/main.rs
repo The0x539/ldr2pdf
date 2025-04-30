@@ -15,14 +15,6 @@ mod setup;
 mod traverse;
 mod watch;
 
-// TODO: put this in bevy state properly
-fn model_path() -> std::path::PathBuf {
-    std::env::args_os()
-        .nth(1)
-        .map(From::from)
-        .unwrap_or_else(|| dirs::document_dir().unwrap().join("lego/aria/HQ.io"))
-}
-
 fn main() {
     App::new()
         .add_plugins((
@@ -53,16 +45,7 @@ fn main() {
                 bevy_mod_outline::AutoGenerateOutlineNormalsPlugin::default(),
             ),
         ))
-        .add_systems(Startup, (setup::setup, setup::link_steps).chain())
-        .add_systems(
-            Update,
-            (setup::reset, setup::link_steps)
-                .chain()
-                .run_if(watch::file_touched(&model_path())),
-        )
-        .init_resource::<instruction::KeyBindings>()
-        .init_resource::<instruction::CurrentStep>()
-        .add_systems(Update, instruction::update)
-        .add_systems(Update, instruction::camera_control)
+        .add_plugins(setup::setup_plugin)
+        .add_plugins(instruction::instruction_plugin)
         .run();
 }
