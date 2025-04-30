@@ -2,13 +2,14 @@ use bevy::prelude::*;
 use bevy_blendy_cameras::{
     FlyCameraController, OrbitCameraController, SwitchToFlyController, SwitchToOrbitController,
 };
+use bevy_lines::prelude::PolylineHandle;
 
 use crate::setup::{DoublyLinked, Model, MyOverlay, Step};
 
 pub fn instruction_plugin(app: &mut App) {
     app.init_resource::<KeyBindings>()
         .init_resource::<CurrentStep>()
-        .add_systems(Update, input);
+        .add_systems(Update, (input, update_focus).chain());
 
     app.world_mut().add_observer(change_step);
 }
@@ -43,7 +44,7 @@ impl FromWorld for CurrentStep {
     }
 }
 
-#[derive(Event)]
+#[derive(Event, PartialEq, Eq)]
 pub enum ChangeStep {
     Next,
     Previous,
@@ -83,16 +84,18 @@ fn input(
     }
 }
 
+type WithModelOrStep = Or<(With<Model>, With<Step>)>;
+
 fn change_step(
     trigger: Trigger<ChangeStep>,
     mut commands: Commands,
     models: Query<&Model>,
     steps: Query<(&Step, &Parent)>,
     step_sequence: Query<&DoublyLinked>,
-    mut vis: Query<&mut Visibility>,
     mut current_step: ResMut<CurrentStep>,
-    #[cfg(feature = "outline")] children: Query<&Children, Or<(With<Model>, With<Step>)>>,
-    #[cfg(feature = "overlay")] parents: Query<&Parent, Or<(With<Model>, With<Step>)>>,
+    mut vis: Query<&mut Visibility, WithModelOrStep>,
+    #[cfg(feature = "outline")] children: Query<&Children, WithModelOrStep>,
+    #[cfg(feature = "overlay")] parents: Query<&Parent, WithModelOrStep>,
     #[cfg(feature = "overlay")] mut text: Single<&mut Text, With<MyOverlay>>,
 ) {
     // borrowck doesn't like my usage pattern with the smart pointer
@@ -122,11 +125,18 @@ fn change_step(
 
     // WIP feature: this hides everything but the current submodel,
     // but I would also like for it to not apply the parent's transform
-    const FOCUS_SUBMODELS: bool = false;
+    const FOCUS_SUBMODELS: bool = true;
 
     if FOCUS_SUBMODELS {
         *vis.get_mut(old_model_id).unwrap() = Visibility::Inherited;
         *vis.get_mut(model_id).unwrap() = Visibility::Visible;
+
+        if old_model_id != model_id {
+            commands.entity(old_model_id).insert(ToggleFocus);
+        }
+        if old_model_id != model_id || *trigger.event() == ChangeStep::Refresh {
+            commands.entity(model_id).insert(ToggleFocus);
+        }
     }
 
     let show_up_to = steps.get(*step_id).unwrap().0.index;
@@ -180,5 +190,24 @@ fn change_step(
         } else {
             Visibility::Hidden
         };
+    }
+}
+
+#[derive(Component)]
+struct ToggleFocus;
+
+#[derive(Component)]
+pub struct SavedTransform(pub Transform);
+
+fn update_focus(
+    mut commands: Commands,
+    mut transforms: Query<
+        (Entity, &mut Transform, &mut SavedTransform),
+        (With<ToggleFocus>, Without<PolylineHandle>),
+    >,
+) {
+    for (entity, mut active, mut saved) in transforms.iter_mut() {
+        std::mem::swap(&mut *active, &mut saved.0);
+        commands.entity(entity).remove::<ToggleFocus>();
     }
 }

@@ -9,7 +9,12 @@ use weldr::SourceMap;
 
 use bevy::{ecs::system::SystemParam, prelude::*, render::camera::Exposure};
 
-use crate::{instruction::CurrentStep, material::MyMaterial, primitives::Primitives, traverse};
+use crate::{
+    instruction::{CurrentStep, SavedTransform},
+    material::MyMaterial,
+    primitives::Primitives,
+    traverse,
+};
 
 // TODO: put this in bevy state properly
 fn model_path() -> std::path::PathBuf {
@@ -20,8 +25,8 @@ fn model_path() -> std::path::PathBuf {
 }
 
 pub fn setup_plugin(app: &mut App) {
-    let on_startup = (initial_setup, load_model, link_steps).chain();
-    let on_update = (unload_model, load_model, link_steps)
+    let on_startup = (initial_setup, load_model, finalize_loading).chain();
+    let on_update = (unload_model, load_model, finalize_loading)
         .chain()
         .run_if(crate::watch::file_touched(&model_path()));
 
@@ -114,20 +119,21 @@ fn load_model(mut commands: Commands, mut model_assets: ModelAssets) {
         color_map,
     };
 
-    let base_transform =
-        Mat4::from_rotation_z(std::f32::consts::PI) * Mat4::from_scale(Vec3::splat(0.05));
-
     // A hidden entity that serves as the root of the hierarchy,
     // so that descendants must opt IN to being visible.
     // Originally intended as a "holding area" for whatever isn't the current submodel.
     let shadow_realm = commands.spawn((
         ShadowRealm,
         Visibility::Hidden,
-        Transform::from_matrix(base_transform),
+        Transform::from_matrix(base_transform()),
     ));
 
     let model_root = handles.spawn_model(shadow_realm, &mut model_assets, &model);
     commands.entity(model_root).insert(ModelRoot);
+}
+
+pub fn base_transform() -> Mat4 {
+    Mat4::from_rotation_z(std::f32::consts::PI) * Mat4::from_scale(Vec3::splat(0.05))
 }
 
 fn initial_setup(mut commands: Commands, mut ambient_light: ResMut<AmbientLight>) {
@@ -182,13 +188,15 @@ fn unload_model(root: Option<Single<Entity, With<ModelRoot>>>, mut commands: Com
     }
 }
 
-fn link_steps(
+fn finalize_loading(
     mut commands: Commands,
     steps: Query<&Step>,
     models: Query<&Model>,
     root: Query<&Model, With<ModelRoot>>,
     mut links: Query<&mut DoublyLinked>,
     mut current_step: ResMut<CurrentStep>,
+    model_entities: Query<(Entity, &Transform), With<Model>>,
+    transform_helper: TransformHelper,
 ) {
     let mut sequence: Vec<Entity> = vec![];
     traverse_hierarchy(&steps, &models, root.single(), &mut sequence);
@@ -198,6 +206,24 @@ fn link_steps(
         let b = pair[1];
         links.get_mut(a).unwrap().next = Some(b);
         links.get_mut(b).unwrap().previous = Some(a);
+    }
+
+    // TODO: I tried many approaches to setting this up.
+    // Many were foiled by GlobalTransform not propagating until LateUpdate.
+    // Now that the math is figured out, determine if this is still the best approach.
+    for (entity, local_t) in model_entities.iter() {
+        let global = transform_helper
+            .compute_global_transform(entity)
+            .unwrap()
+            .compute_matrix();
+
+        let local = local_t.compute_matrix();
+        let parent = global * local.inverse();
+        let undo_parent = parent.inverse() * base_transform();
+
+        commands
+            .entity(entity)
+            .insert(SavedTransform(Transform::from_matrix(undo_parent)));
     }
 
     // TODO: figure out how to remember step position across reloads of a model.
@@ -300,6 +326,7 @@ impl Handles {
             c.spawn(PolylineBundle {
                 polyline: PolylineHandle(ph.line),
                 material: self.line_material.clone(),
+                transform: Transform::IDENTITY,
                 ..default()
             });
 
@@ -307,6 +334,7 @@ impl Handles {
                 c.spawn(PolylineBundle {
                     polyline: PolylineHandle(opt_line),
                     material: self.opt_line_material.clone(),
+                    transform: Transform::IDENTITY,
                     ..default()
                 });
             }
