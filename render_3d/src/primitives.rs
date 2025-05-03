@@ -13,7 +13,8 @@ use bevy::{prelude::*, render::mesh::Indices};
 use crate::material::ATTRIBUTE_FLAGS;
 
 #[derive(Default)]
-pub struct Primitives {
+pub struct PartData {
+    pub name: String,
     faces: Vec<TriOrQuad<Vec3>>,
     face_colors: HashMap<usize, ColorCode>,
     contrast_faces: HashSet<usize>,
@@ -133,13 +134,17 @@ as_key!(Vec3 as [u32; 3]);
 as_key!([Vec3; 2] as [u32; 6]);
 as_key!(AttributeVertex as [u32; 6]);
 
-impl Primitives {
-    pub fn of_part(source_map: &SourceMap, model_name: &str) -> Self {
-        let mut primitives = Self::default();
+impl PartData {
+    pub fn load(source_map: &SourceMap, model_name: &str) -> Self {
+        let mut output = Self::default();
+
+        // we hope to find a human-friendly name at the start of the root file, but that's not guaranteed
+        output.name = model_name.to_owned();
+
         let mut ctx = GeometryContext::new();
         ctx.transform = weldr::Mat4::IDENTITY;
-        traverse_part(source_map, model_name, ctx, &mut primitives);
-        primitives
+        traverse_part(source_map, model_name, ctx, &mut output, true);
+        output
     }
 
     pub fn build_mesh(&self, color_map: &ColorMap) -> Mesh {
@@ -309,7 +314,8 @@ fn traverse_part(
     source_map: &SourceMap,
     model_name: &str,
     ctx: GeometryContext,
-    output: &mut Primitives,
+    output: &mut PartData,
+    root: bool,
 ) {
     let Some(model) = source_map.get(model_name) else {
         panic!("{model_name}");
@@ -354,7 +360,9 @@ fn traverse_part(
         .position(is_stud_name)
         .is_some_and(|i| ctx.names[i].ends_with("4-4cyli.dat"));
 
-    for cmd in &model.cmds {
+    let mut first_line_is_file_command = false;
+
+    for (i, cmd) in model.cmds.iter().enumerate() {
         let effective_winding = if current_inverted {
             !current_winding
         } else {
@@ -393,11 +401,13 @@ fn traverse_part(
                     };
                 } else if c.text.contains("BFC INVERTNEXT") {
                     invert_next = true;
+                } else if root && (i == 0 || (i == 1 && first_line_is_file_command)) {
+                    output.name = c.text.clone();
                 }
             }
             Command::SubFileRef(sfrc) => {
                 let child = ctx.child(sfrc, invert_next);
-                traverse_part(source_map, &sfrc.file, child, output);
+                traverse_part(source_map, &sfrc.file, child, output, false);
                 invert_next = false;
             }
             Command::Line(l) => output.lines.push(project(&ctx, l.vertices)),
@@ -415,6 +425,7 @@ fn traverse_part(
                 push_triangle(TriOrQuad::Quad(q.vertices), q.color);
                 // push_triangle([c, d, a], q.color);
             }
+            Command::File(_) if root && i == 0 => first_line_is_file_command = true,
             _ => {}
         }
     }

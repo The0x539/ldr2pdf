@@ -13,7 +13,7 @@ use crate::{
     ModelPath, ViewerConfig,
     instruction::{CurrentStep, SavedTransform},
     material::MyMaterial,
-    primitives::Primitives,
+    primitives::PartData,
     traverse,
 };
 
@@ -145,7 +145,7 @@ pub fn base_transform() -> Mat4 {
 fn initial_setup(
     mut commands: Commands,
     mut ambient_light: ResMut<AmbientLight>,
-    viewer_config: Res<ViewerConfig>,
+    #[cfg(feature = "overlay")] viewer_config: Res<ViewerConfig>,
 ) {
     commands.spawn((
         PointLight {
@@ -280,6 +280,7 @@ struct Handles {
 
 #[derive(Clone)]
 struct PartHandles {
+    name: String,
     mesh: Handle<Mesh>,
     line: Handle<Polyline>,
     opt_line: Option<Handle<Polyline>>,
@@ -291,14 +292,15 @@ impl Handles {
             return;
         }
 
-        let primitives = Primitives::of_part(&self.source_map, &part.id);
+        let data = PartData::load(&self.source_map, &part.id);
 
         self.part.insert(
             part.id.clone(),
             PartHandles {
-                mesh: assets.meshes.add(primitives.build_mesh(&self.color_map)),
-                line: assets.lines.add(primitives.build_lines()),
-                opt_line: primitives.build_opt_lines().map(|l| assets.lines.add(l)),
+                mesh: assets.meshes.add(data.build_mesh(&self.color_map)),
+                line: assets.lines.add(data.build_lines()),
+                opt_line: data.build_opt_lines().map(|l| assets.lines.add(l)),
+                name: data.name,
             },
         );
     }
@@ -327,7 +329,20 @@ impl Handles {
 
         let transform = Transform::from_matrix(part.transform);
 
-        let bundle = (Mesh3d(ph.mesh), material.clone(), transform);
+        let part_name = ph.name.replace("  ", " ");
+        let color_name = self
+            .color_map
+            .by_code(part.color)
+            .name
+            .replace("Trans_", "Trans-")
+            .replace("_", " ");
+
+        let bundle = (
+            Mesh3d(ph.mesh),
+            material.clone(),
+            transform,
+            Name::new(format!("{color_name} {part_name}")),
+        );
         let parent_id = parent.id();
         let mut part_entity = parent.commands_mut().spawn(bundle);
         part_entity.set_parent(parent_id);
@@ -383,6 +398,7 @@ impl Handles {
         model_entity.insert(bevy_mod_outline::InheritOutline);
 
         model_entity.insert(model_component);
+        model_entity.insert(Name::new(model.name.clone()));
         model_entity.id()
     }
 

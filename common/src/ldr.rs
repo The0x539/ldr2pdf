@@ -101,7 +101,7 @@ pub fn new_color(current: ColorCode, new: ColorCode) -> ColorCode {
     if new == CURRENT_COLOR { current } else { new }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ColorMap {
     codes: HashMap<ColorCode, usize>,
     names: HashMap<String, usize>,

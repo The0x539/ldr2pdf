@@ -10,7 +10,7 @@ use crate::{
 };
 
 #[cfg(feature = "overlay")]
-use crate::setup::MyOverlay;
+use {crate::setup::MyOverlay, indexmap::IndexMap, std::fmt::Write};
 
 pub fn instruction_plugin(app: &mut App) {
     app.init_resource::<KeyBindings>()
@@ -101,9 +101,10 @@ fn change_step(
     mut current_step: ResMut<CurrentStep>,
     mut vis: Query<&mut Visibility, WithModelOrStep>,
     viewer_config: Res<ViewerConfig>,
-    #[cfg(feature = "outline")] children: Query<&Children, WithModelOrStep>,
+    #[cfg(any(feature = "outline", feature = "overlay"))] children: Query<&Children>,
     #[cfg(feature = "overlay")] parents: Query<&Parent, WithModelOrStep>,
     #[cfg(feature = "overlay")] mut text: Single<&mut Text, With<MyOverlay>>,
+    #[cfg(feature = "overlay")] names: Query<&Name>,
 ) {
     if !viewer_config.steps {
         return;
@@ -173,16 +174,38 @@ fn change_step(
 
     #[cfg(feature = "overlay")]
     {
-        let mut lines = vec![format!("step {}", show_up_to + 1)];
-        for id in parents.iter_ancestors(*step_id) {
+        let ids = std::iter::once(*step_id)
+            .chain(parents.iter_ancestors(*step_id))
+            .collect::<Vec<_>>();
+
+        let buf = &mut text.0;
+        buf.clear();
+
+        for id in ids.into_iter().rev() {
             if let Ok(model) = models.get(id) {
-                lines.push(model.name.clone());
+                buf.push_str(&model.name);
             } else if let Ok((step, _)) = steps.get(id) {
-                lines.push(format!("step {}", step.index + 1));
+                writeln!(buf, ", step {}", step.index + 1).unwrap();
             }
         }
-        lines.reverse();
-        text.0 = lines.join("\n");
+
+        if let Ok(step_items) = children.get(*step_id) {
+            let mut counts = IndexMap::new();
+            for &step_item_id in step_items {
+                let name = names.get(step_item_id).unwrap();
+                *counts.entry(name).or_insert(0) += 1;
+            }
+
+            for (name, count) in counts {
+                if count == 1 {
+                    writeln!(buf, " - {name}").unwrap()
+                } else {
+                    writeln!(buf, " - {count}x {name}").unwrap()
+                }
+            }
+        } else {
+            buf.push_str("(empty step)\n");
+        }
     }
 
     let model = models.get(model_id).unwrap();
