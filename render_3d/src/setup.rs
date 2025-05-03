@@ -436,6 +436,11 @@ impl Handles {
         }
 
         step_entity.insert(step_component);
+
+        if let Some(name) = &step.name {
+            step_entity.insert(Name::new(name.to_owned()));
+        }
+
         step_entity.id()
     }
 }

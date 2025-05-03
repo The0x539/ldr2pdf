@@ -185,7 +185,11 @@ fn change_step(
             if let Ok(model) = models.get(id) {
                 buf.push_str(&model.name);
             } else if let Ok((step, _)) = steps.get(id) {
-                writeln!(buf, ", step {}", step.index + 1).unwrap();
+                write!(buf, ", step {}", step.index + 1).unwrap();
+                if let Ok(name) = names.get(id) {
+                    write!(buf, ": {name}").unwrap();
+                }
+                buf.push('\n');
             }
         }
 

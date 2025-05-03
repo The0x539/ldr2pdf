@@ -18,6 +18,7 @@ pub(crate) struct Model {
 
 #[derive(Default)]
 pub(crate) struct Step {
+    pub name: Option<String>,
     pub items: Vec<StepItem>,
 }
 
@@ -77,6 +78,8 @@ pub(crate) fn traverse_design(
                 if c.text == "STEP" {
                     step = output.new_step();
                     step_is_real = false;
+                } else if let Some(step_name) = c.text.strip_prefix("STUDIOSTEPDESC") {
+                    step.name = Some(step_name.trim().to_owned());
                 }
             }
             Command::SubFileRef(sfrc) => {
