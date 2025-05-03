@@ -22,10 +22,25 @@ mod watch;
 #[derive(Resource)]
 struct ModelPath(PathBuf);
 
+#[derive(Resource)]
+struct ViewerConfig {
+    steps: bool,
+    focus_submodels: bool,
+    #[cfg(feature = "overlay")]
+    show_fps: bool,
+}
+
 #[derive(FromArgs, Debug)]
 struct Args {
     #[argh(positional, default = "default_path()")]
     model_path: PathBuf,
+    #[argh(switch)]
+    no_steps: bool,
+    #[argh(switch)]
+    no_focus_submodels: bool,
+    #[cfg(feature = "overlay")]
+    #[argh(switch)]
+    show_fps: bool,
 }
 
 fn default_path() -> PathBuf {
@@ -34,6 +49,12 @@ fn default_path() -> PathBuf {
 
 fn main() {
     let args = argh::from_env::<Args>();
+    let viewer_config = ViewerConfig {
+        steps: !args.no_steps,
+        focus_submodels: !args.no_focus_submodels,
+        #[cfg(feature = "overlay")]
+        show_fps: args.show_fps,
+    };
 
     App::new()
         .add_plugins((
@@ -65,6 +86,7 @@ fn main() {
             ),
         ))
         .insert_resource(ModelPath(args.model_path))
+        .insert_resource(viewer_config)
         .add_plugins(setup::setup_plugin)
         .add_plugins(instruction::instruction_plugin)
         .run();

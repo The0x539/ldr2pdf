@@ -4,7 +4,13 @@ use bevy_blendy_cameras::{
 };
 use bevy_lines::prelude::PolylineHandle;
 
-use crate::setup::{DoublyLinked, Model, MyOverlay, Step};
+use crate::{
+    ViewerConfig,
+    setup::{DoublyLinked, Model, Step},
+};
+
+#[cfg(feature = "overlay")]
+use crate::setup::MyOverlay;
 
 pub fn instruction_plugin(app: &mut App) {
     app.init_resource::<KeyBindings>()
@@ -94,10 +100,15 @@ fn change_step(
     step_sequence: Query<&DoublyLinked>,
     mut current_step: ResMut<CurrentStep>,
     mut vis: Query<&mut Visibility, WithModelOrStep>,
+    viewer_config: Res<ViewerConfig>,
     #[cfg(feature = "outline")] children: Query<&Children, WithModelOrStep>,
     #[cfg(feature = "overlay")] parents: Query<&Parent, WithModelOrStep>,
     #[cfg(feature = "overlay")] mut text: Single<&mut Text, With<MyOverlay>>,
 ) {
+    if !viewer_config.steps {
+        return;
+    }
+
     // borrowck doesn't like my usage pattern with the smart pointer
     let current_step = &mut *current_step;
 
@@ -123,11 +134,7 @@ fn change_step(
     let old_model_id = steps.get(old_step_id).unwrap().1.get();
     let model_id = steps.get(*step_id).unwrap().1.get();
 
-    // WIP feature: this hides everything but the current submodel,
-    // but I would also like for it to not apply the parent's transform
-    const FOCUS_SUBMODELS: bool = true;
-
-    if FOCUS_SUBMODELS {
+    if viewer_config.focus_submodels {
         *vis.get_mut(old_model_id).unwrap() = Visibility::Inherited;
         *vis.get_mut(model_id).unwrap() = Visibility::Visible;
 
@@ -182,7 +189,7 @@ fn change_step(
 
     for (i, step_id) in model.steps.iter().enumerate() {
         *vis.get_mut(*step_id).unwrap() = if i <= show_up_to {
-            if FOCUS_SUBMODELS {
+            if viewer_config.focus_submodels {
                 Visibility::Inherited
             } else {
                 Visibility::Visible

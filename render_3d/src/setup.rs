@@ -10,7 +10,7 @@ use weldr::SourceMap;
 use bevy::{ecs::system::SystemParam, prelude::*, render::camera::Exposure};
 
 use crate::{
-    ModelPath,
+    ModelPath, ViewerConfig,
     instruction::{CurrentStep, SavedTransform},
     material::MyMaterial,
     primitives::Primitives,
@@ -47,7 +47,7 @@ pub struct ModelRoot;
 
 #[derive(Component)]
 #[require(Transform, Visibility)]
-pub struct ShadowRealm;
+pub struct SceneRoot;
 
 #[derive(Debug, Component)]
 #[require(Transform, Visibility)]
@@ -71,10 +71,16 @@ pub struct DoublyLinked {
     pub next: Option<Entity>,
 }
 
+#[cfg(feature = "overlay")]
 #[derive(Component)]
 pub struct MyOverlay;
 
-fn load_model(mut commands: Commands, mut model_assets: ModelAssets, model_path: Res<ModelPath>) {
+fn load_model(
+    mut commands: Commands,
+    mut model_assets: ModelAssets,
+    model_path: Res<ModelPath>,
+    viewer_config: Res<ViewerConfig>,
+) {
     let path = &model_path.0;
     if !path.exists() {
         return;
@@ -118,16 +124,17 @@ fn load_model(mut commands: Commands, mut model_assets: ModelAssets, model_path:
         color_map,
     };
 
-    // A hidden entity that serves as the root of the hierarchy,
-    // so that descendants must opt IN to being visible.
-    // Originally intended as a "holding area" for whatever isn't the current submodel.
-    let shadow_realm = commands.spawn((
-        ShadowRealm,
-        Visibility::Hidden,
+    let scene_root = commands.spawn((
+        SceneRoot,
+        if viewer_config.steps {
+            Visibility::Hidden
+        } else {
+            Visibility::Visible
+        },
         Transform::from_matrix(base_transform()),
     ));
 
-    let model_root = handles.spawn_model(shadow_realm, &mut model_assets, &model);
+    let model_root = handles.spawn_model(scene_root, &mut model_assets, &model);
     commands.entity(model_root).insert(ModelRoot);
 }
 
@@ -135,7 +142,11 @@ pub fn base_transform() -> Mat4 {
     Mat4::from_rotation_z(std::f32::consts::PI) * Mat4::from_scale(Vec3::splat(0.05))
 }
 
-fn initial_setup(mut commands: Commands, mut ambient_light: ResMut<AmbientLight>) {
+fn initial_setup(
+    mut commands: Commands,
+    mut ambient_light: ResMut<AmbientLight>,
+    viewer_config: Res<ViewerConfig>,
+) {
     commands.spawn((
         PointLight {
             radius: 1.0,
@@ -175,13 +186,16 @@ fn initial_setup(mut commands: Commands, mut ambient_light: ResMut<AmbientLight>
     ));
 
     #[cfg(feature = "overlay")]
-    commands.spawn(iyes_perf_ui::entries::PerfUiAllEntries::default());
+    {
+        if viewer_config.show_fps {
+            commands.spawn(iyes_perf_ui::entries::PerfUiAllEntries::default());
+        }
 
-    #[cfg(feature = "overlay")]
-    commands.spawn((Text::new(""), MyOverlay));
+        commands.spawn((Text::new(""), MyOverlay));
+    }
 }
 
-fn unload_model(root: Option<Single<Entity, With<ModelRoot>>>, mut commands: Commands) {
+fn unload_model(root: Option<Single<Entity, With<SceneRoot>>>, mut commands: Commands) {
     if let Some(root) = root {
         commands.entity(*root).despawn_recursive();
     }
