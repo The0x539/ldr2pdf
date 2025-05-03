@@ -10,25 +10,24 @@ use weldr::SourceMap;
 use bevy::{ecs::system::SystemParam, prelude::*, render::camera::Exposure};
 
 use crate::{
+    ModelPath,
     instruction::{CurrentStep, SavedTransform},
     material::MyMaterial,
     primitives::Primitives,
     traverse,
 };
 
-// TODO: put this in bevy state properly
-fn model_path() -> std::path::PathBuf {
-    std::env::args_os()
-        .nth(1)
-        .map(From::from)
-        .unwrap_or_else(|| dirs::document_dir().unwrap().join("lego/aria/HQ.io"))
-}
-
 pub fn setup_plugin(app: &mut App) {
     let on_startup = (initial_setup, load_model, finalize_loading).chain();
+
+    // TODO: set this up so that we can respond to a new path being selected.
+    // this is likely to involve moving the file-touched check to a system?
+    // in any case, having to get this in this fashion feels wrong
+    let model_path = app.world().get_resource::<ModelPath>().unwrap();
+
     let on_update = (unload_model, load_model, finalize_loading)
         .chain()
-        .run_if(crate::watch::file_touched(&model_path()));
+        .run_if(crate::watch::file_touched(&model_path.0));
 
     app.add_systems(Startup, on_startup);
     app.add_systems(Update, on_update);
@@ -75,8 +74,8 @@ pub struct DoublyLinked {
 #[derive(Component)]
 pub struct MyOverlay;
 
-fn load_model(mut commands: Commands, mut model_assets: ModelAssets) {
-    let path = model_path();
+fn load_model(mut commands: Commands, mut model_assets: ModelAssets, model_path: Res<ModelPath>) {
+    let path = &model_path.0;
     if !path.exists() {
         return;
     }

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use bevy_lines::prelude::*;
 
 use bevy::{
@@ -8,6 +10,8 @@ use bevy::{
     },
 };
 
+use argh::FromArgs;
+
 mod instruction;
 mod material;
 mod primitives;
@@ -15,7 +19,22 @@ mod setup;
 mod traverse;
 mod watch;
 
+#[derive(Resource)]
+struct ModelPath(PathBuf);
+
+#[derive(FromArgs, Debug)]
+struct Args {
+    #[argh(positional, default = "default_path()")]
+    model_path: PathBuf,
+}
+
+fn default_path() -> PathBuf {
+    dirs::document_dir().unwrap().join("lego/aria/HQ.io")
+}
+
 fn main() {
+    let args = argh::from_env::<Args>();
+
     App::new()
         .add_plugins((
             DefaultPlugins.set(RenderPlugin {
@@ -45,6 +64,7 @@ fn main() {
                 bevy_mod_outline::AutoGenerateOutlineNormalsPlugin::default(),
             ),
         ))
+        .insert_resource(ModelPath(args.model_path))
         .add_plugins(setup::setup_plugin)
         .add_plugins(instruction::instruction_plugin)
         .run();
