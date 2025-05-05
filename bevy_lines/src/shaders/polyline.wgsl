@@ -87,14 +87,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
         let control_clip = clip_from_world(control_world);
         let control_screen = screen_from_clip(control_clip);
-
-        let drawn_line = find_line(drawn_screen);
-        let control_line = find_line(control_screen);
-        let intersection = find_intersection(drawn_line, control_line);
-
-        let bounds = minmax(control_screen.a.x, control_screen.b.x);
-        let intersects = intersection.x >= bounds[0] && intersection.x <= bounds[1];
-
+        let intersects = check_opt_line_intersection(drawn_screen, control_screen);
         if intersects {
             // Prevent the line from being drawn by throwing a NaN-shaped wrench into the math.
             let zero = 0.0;
@@ -161,13 +154,12 @@ fn screen_from_clip(seg: Segment4) -> Segment2 {
     return Segment2(a, b);
 }
 
-fn minmax(a: f32, b: f32) -> vec2<f32> {
-    return vec2(min(a, b), max(a, b));
+fn in_bounds(a: f32, b: f32, v: f32) -> bool {
+    return min(a, b) <= v && v <= max(a, b);
 }
 
 fn find_line(seg: Segment2) -> Line {
-    var slope = (seg.b.y - seg.a.y) / (seg.b.x - seg.a.x);
-    slope = clamp(slope, -65536.0, 65536.0);
+    let slope = (seg.b.y - seg.a.y) / (seg.b.x - seg.a.x);
     let intercept = seg.a.y - slope * seg.a.x;
     return Line(slope, intercept);
 }
@@ -177,7 +169,29 @@ fn sample_line(f: Line, x: f32) -> vec2<f32> {
     return vec2(x, y);
 }
 
-fn find_intersection(y1: Line, y2: Line) -> vec2<f32> {
+fn check_opt_line_intersection(drawn: Segment2, control: Segment2) -> bool {
+    let e = 0.01;
+    let drawn_is_vertical = distance(drawn.a.x, drawn.b.x) < e;
+    let control_is_vertical = distance(control.a.x, control.b.x) < e;
+    if drawn_is_vertical && control_is_vertical {
+        return false;
+    } else if drawn_is_vertical {
+        return in_bounds(control.a.x, control.b.x, drawn.a.x);
+    } else if control_is_vertical {
+        let x = control.a.x;
+        let t = (x - drawn.a.x) / (drawn.b.x - drawn.a.x);
+        let y = mix(drawn.a.y, drawn.b.y, t);
+        return in_bounds(control.a.y, control.b.y, y);
+    }
+
+    let drawn_line = find_line(drawn);
+    let control_line = find_line(control);
+    let intersection = find_line_intersection(drawn_line, control_line);
+
+    return in_bounds(control.a.x, control.b.x, intersection.x);
+}
+
+fn find_line_intersection(y1: Line, y2: Line) -> vec2<f32> {
     // y1 = m1x + b1
     // y2 = m2x + b2
     // m1x + b1 = m2x + b2
