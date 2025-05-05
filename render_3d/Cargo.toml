@@ -18,7 +18,7 @@ indexmap = { version = "2.9.0", optional = true}
 bevy_mod_outline = { version = "0.9.1", optional = true, default-features = false }
 iyes_perf_ui = { version = "0.4.0", optional = true }
 bevy_blendy_cameras = "0.6.1"
-bevy_lines.path = "../bevy_lines"
+bevy_lines = { path = "../bevy_lines", optional = true }
 
 [dependencies.bevy]
 version = "0.15.3"
@@ -32,6 +32,7 @@ features = [
 ]
 
 [features]
-default = ["overlay", "outline"]
+default = ["overlay", "outline", "line"]
 overlay = ["dep:iyes_perf_ui", "bevy/default_font", "dep:indexmap"]
 outline = ["dep:bevy_mod_outline"]
+line = ["dep:bevy_lines"]

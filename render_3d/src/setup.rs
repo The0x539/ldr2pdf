@@ -1,5 +1,3 @@
-use bevy_blendy_cameras::{FlyCameraController, OrbitCameraController};
-use bevy_lines::prelude::*;
 use ldr2pdf_common::{
     ldr::{ColorCode, ColorMap, GeometryContext},
     resolver::Resolver,
@@ -8,6 +6,9 @@ use std::collections::{HashMap, HashSet};
 use weldr::SourceMap;
 
 use bevy::{ecs::system::SystemParam, prelude::*, render::camera::Exposure};
+use bevy_blendy_cameras::{FlyCameraController, OrbitCameraController};
+#[cfg(feature = "line")]
+use bevy_lines::prelude::*;
 
 use crate::{
     ModelPath, ViewerConfig,
@@ -37,7 +38,9 @@ pub fn setup_plugin(app: &mut App) {
 struct ModelAssets<'w> {
     meshes: ResMut<'w, Assets<Mesh>>,
     materials: ResMut<'w, Assets<MyMaterial>>,
+    #[cfg(feature = "line")]
     lines: ResMut<'w, Assets<Polyline>>,
+    #[cfg(feature = "line")]
     line_materials: ResMut<'w, Assets<PolylineMaterial>>,
 }
 
@@ -108,11 +111,13 @@ fn load_model(
     let mut handles = Handles {
         part: HashMap::new(),
         material: HashMap::new(),
+        #[cfg(feature = "line")]
         line_material: PolylineMaterialHandle(model_assets.line_materials.add(PolylineMaterial {
             width: 3.0,
             color: Color::BLACK.into(),
             ..default()
         })),
+        #[cfg(feature = "line")]
         opt_line_material: PolylineMaterialHandle(model_assets.line_materials.add(
             PolylineMaterial {
                 width: 6.0,
@@ -272,7 +277,9 @@ fn traverse_hierarchy(
 struct Handles {
     part: HashMap<String, PartHandles>,
     material: HashMap<ColorCode, Handle<MyMaterial>>,
+    #[cfg(feature = "line")]
     line_material: PolylineMaterialHandle,
+    #[cfg(feature = "line")]
     opt_line_material: PolylineMaterialHandle,
     source_map: SourceMap,
     color_map: ColorMap,
@@ -282,7 +289,9 @@ struct Handles {
 struct PartHandles {
     name: String,
     mesh: Handle<Mesh>,
+    #[cfg(feature = "line")]
     line: Handle<Polyline>,
+    #[cfg(feature = "line")]
     opt_line: Option<Handle<Polyline>>,
 }
 
@@ -298,7 +307,9 @@ impl Handles {
             part.id.clone(),
             PartHandles {
                 mesh: assets.meshes.add(data.build_mesh(&self.color_map)),
+                #[cfg(feature = "line")]
                 line: assets.lines.add(data.build_lines()),
+                #[cfg(feature = "line")]
                 opt_line: data.build_opt_lines().map(|l| assets.lines.add(l)),
                 name: data.name,
             },
@@ -350,6 +361,7 @@ impl Handles {
         #[cfg(feature = "outline")]
         part_entity.insert(bevy_mod_outline::InheritOutline);
 
+        #[cfg(feature = "line")]
         part_entity.with_children(|c| {
             c.spawn(PolylineBundle {
                 polyline: PolylineHandle(ph.line),

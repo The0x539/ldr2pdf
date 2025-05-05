@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-use bevy_lines::prelude::*;
-
 use bevy::{
     prelude::*,
     render::{
@@ -65,7 +63,8 @@ fn main() {
                 }),
                 ..default()
             }),
-            PolylinePlugin,
+            #[cfg(feature = "line")]
+            bevy_lines::PolylinePlugin,
             bevy_blendy_cameras::BlendyCamerasPlugin,
             MaterialPlugin::<material::MyMaterial> {
                 prepass_enabled: false,

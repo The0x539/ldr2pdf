@@ -1,4 +1,3 @@
-use bevy_lines::prelude::*;
 use bytemuck::NoUninit;
 use flat_zip::FlatZipExt;
 use ldr2pdf_common::ldr::{
@@ -9,6 +8,9 @@ use std::hash::Hash;
 use weldr::{Command, SourceMap};
 
 use bevy::{prelude::*, render::mesh::Indices};
+
+#[cfg(feature = "line")]
+use bevy_lines::prelude::Polyline;
 
 use crate::material::ATTRIBUTE_FLAGS;
 
@@ -236,6 +238,7 @@ impl PartData {
         }
     }
 
+    #[cfg(feature = "line")]
     pub fn build_lines(&self) -> Polyline {
         Polyline {
             vertices: self.lines.iter().copied().flatten().collect(),
@@ -243,6 +246,7 @@ impl PartData {
         }
     }
 
+    #[cfg(feature = "line")]
     pub fn build_opt_lines(&self) -> Option<Polyline> {
         if self.opt_lines.is_empty() {
             return None;

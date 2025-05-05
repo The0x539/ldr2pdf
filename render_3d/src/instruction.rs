@@ -2,7 +2,6 @@ use bevy::prelude::*;
 use bevy_blendy_cameras::{
     FlyCameraController, OrbitCameraController, SwitchToFlyController, SwitchToOrbitController,
 };
-use bevy_lines::prelude::PolylineHandle;
 
 use crate::{
     ViewerConfig,
@@ -91,6 +90,7 @@ fn input(
 }
 
 type WithModelOrStep = Or<(With<Model>, With<Step>)>;
+type WithSolid = Or<(With<Model>, With<Step>, With<Mesh3d>)>;
 
 fn change_step(
     trigger: Trigger<ChangeStep>,
@@ -101,7 +101,7 @@ fn change_step(
     mut current_step: ResMut<CurrentStep>,
     mut vis: Query<&mut Visibility, WithModelOrStep>,
     viewer_config: Res<ViewerConfig>,
-    #[cfg(any(feature = "outline", feature = "overlay"))] children: Query<&Children>,
+    #[cfg(any(feature = "outline", feature = "overlay"))] children: Query<&Children, WithSolid>,
     #[cfg(feature = "overlay")] parents: Query<&Parent, WithModelOrStep>,
     #[cfg(feature = "overlay")] mut text: Single<&mut Text, With<MyOverlay>>,
     #[cfg(feature = "overlay")] names: Query<&Name>,
@@ -235,10 +235,7 @@ pub struct SavedTransform(pub Transform);
 
 fn update_focus(
     mut commands: Commands,
-    mut transforms: Query<
-        (Entity, &mut Transform, &mut SavedTransform),
-        (With<ToggleFocus>, Without<PolylineHandle>),
-    >,
+    mut transforms: Query<(Entity, &mut Transform, &mut SavedTransform), With<ToggleFocus>>,
 ) {
     for (entity, mut active, mut saved) in transforms.iter_mut() {
         std::mem::swap(&mut *active, &mut saved.0);
