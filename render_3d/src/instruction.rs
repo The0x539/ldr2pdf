@@ -136,13 +136,14 @@ fn change_step(
     let model_id = steps.get(*step_id).unwrap().1.get();
 
     if viewer_config.focus_submodels {
-        *vis.get_mut(old_model_id).unwrap() = Visibility::Inherited;
-        *vis.get_mut(model_id).unwrap() = Visibility::Visible;
-
         if old_model_id != model_id {
+            *vis.get_mut(old_model_id).unwrap() = Visibility::Inherited;
+            *vis.get_mut(model_id).unwrap() = Visibility::Visible;
+
             commands.entity(old_model_id).insert(ToggleFocus);
-        }
-        if old_model_id != model_id || *trigger.event() == ChangeStep::Refresh {
+            commands.entity(model_id).insert(ToggleFocus);
+        } else if *trigger.event() == ChangeStep::Refresh {
+            *vis.get_mut(model_id).unwrap() = Visibility::Visible;
             commands.entity(model_id).insert(ToggleFocus);
         }
     }
