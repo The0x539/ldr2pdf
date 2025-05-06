@@ -79,10 +79,7 @@ fn main() {
                 iyes_perf_ui::PerfUiPlugin,
             ),
             #[cfg(feature = "outline")]
-            (
-                bevy_mod_outline::OutlinePlugin,
-                bevy_mod_outline::AutoGenerateOutlineNormalsPlugin::default(),
-            ),
+            bevy_mod_outline::OutlinePlugin,
         ))
         .insert_resource(ModelPath(args.model_path))
         .insert_resource(viewer_config)

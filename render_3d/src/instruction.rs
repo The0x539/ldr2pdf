@@ -152,7 +152,7 @@ fn change_step(
 
     #[cfg(feature = "outline")]
     {
-        use bevy_mod_outline::{ComputedOutline, InheritOutline, OutlineVolume};
+        use bevy_mod_outline::{ComputedOutline, InheritOutline, OutlineMode, OutlineVolume};
 
         type AnyOutline = (OutlineVolume, InheritOutline, ComputedOutline);
 
@@ -161,11 +161,14 @@ fn change_step(
             commands.entity(child).remove::<AnyOutline>();
         }
 
-        let outline = OutlineVolume {
-            visible: true,
-            width: 4.0,
-            colour: Color::srgb(1.0, 0.0, 0.0),
-        };
+        let outline = (
+            OutlineVolume {
+                visible: true,
+                width: 4.0,
+                colour: Color::srgb(1.0, 0.0, 0.0),
+            },
+            OutlineMode::FloodFlat,
+        );
 
         commands.entity(*step_id).insert(outline);
         for child in children.iter_descendants(*step_id) {
