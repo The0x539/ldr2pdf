@@ -1,4 +1,3 @@
-use bytemuck::NoUninit;
 use flat_zip::FlatZipExt;
 use ldr2pdf_common::ldr::{
     CURRENT_COLOR, ColorCode, ColorMap, GeometryContext, Winding, new_color,
@@ -105,8 +104,6 @@ struct AttributeFace {
     verts: TriOrQuad<AttributeVertex>,
 }
 
-#[derive(Copy, Clone, NoUninit)]
-#[repr(C)]
 struct AttributeVertex {
     position: Vec3,
     normal: Vec3,
@@ -134,7 +131,6 @@ macro_rules! as_key {
 
 as_key!(Vec3 as [u32; 3]);
 as_key!([Vec3; 2] as [u32; 6]);
-as_key!(AttributeVertex as [u32; 6]);
 
 impl PartData {
     pub fn load(source_map: &SourceMap, model_name: &str) -> Self {
@@ -448,7 +444,7 @@ fn is_contrast(ctx: &GeometryContext) -> bool {
             || parent.eq_ignore_ascii_case("stud4a.dat")
         {
             let (scale, _, _) = ctx.transform.to_scale_rotation_translation();
-            if scale.x.abs() == 6.0 {
+            if scale.x.abs() == 6.0 && scale.y.abs() < 16.0 {
                 return true;
             }
         }
