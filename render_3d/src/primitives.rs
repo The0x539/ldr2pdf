@@ -142,7 +142,26 @@ impl PartData {
         let mut ctx = GeometryContext::new();
         ctx.transform = weldr::Mat4::IDENTITY;
         traverse_part(source_map, model_name, ctx, &mut output, true);
+        output.round();
         output
+    }
+
+    /// Apply a very slight amount of rounding to all vertices,
+    /// so that equality checks / dictionary-key usage works better
+    /// when calculating smooth vertices for the mesh.
+    fn round(&mut self) {
+        let face_verts = self.faces.iter_mut().flatten();
+        let line_verts = self.lines.iter_mut().flatten();
+        let opt_line_verts = self
+            .opt_lines
+            .iter_mut()
+            .flat_map(|([a, b], [c, d])| [a, b, c, d]);
+
+        for vertex in face_verts.chain(line_verts).chain(opt_line_verts) {
+            // 1/4096 LDraw units = 97.65625 nanometers
+            const PRECISION: f32 = 1.0 / 4096.0;
+            *vertex -= *vertex % PRECISION;
+        }
     }
 
     pub fn build_mesh(&self, color_map: &ColorMap) -> Mesh {
