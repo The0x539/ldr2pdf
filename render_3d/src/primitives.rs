@@ -339,30 +339,7 @@ fn traverse_part(
             .map(|v| Vec3::from_array(v.to_array()))
     }
 
-    fn is_stud_name(name: &&str) -> bool {
-        [
-            "stud.dat",
-            "studa.dat",
-            "stud26.dat",
-            "stud2.dat",
-            "stud2a.dat",
-            "stud3.dat",
-            "stud3a.dat",
-            "stud4.dat",
-            "stud4a.dat",
-        ]
-        .iter()
-        .any(|x| name.ends_with(x))
-    }
-
-    // Are we the cylindrical part of a stud, to be drawn with high contrast?
-    // True iff this polygon is descendant of the "4-4cyli.dat" submodel of a stud.
-    let contrast = ctx
-        .names
-        .iter()
-        .skip(1)
-        .position(is_stud_name)
-        .is_some_and(|i| ctx.names[i].ends_with("4-4cyli.dat"));
+    let contrast = is_contrast(&ctx);
 
     let mut first_line_is_file_command = false;
 
@@ -433,4 +410,49 @@ fn traverse_part(
             _ => {}
         }
     }
+}
+
+// Are we the cylindrical part of a stud, to be drawn with high contrast?
+// True iff this polygon is descendant of the "n-fcyli.dat" submodel of a stud.
+// For the tubes on the underside of parts, only the inside of the tube is shaded.
+fn is_contrast(ctx: &GeometryContext) -> bool {
+    if ctx.names.is_empty() {
+        return false;
+    }
+
+    for i in 0..ctx.names.len() - 1 {
+        // TODO: this doesn't catch the entirety of the tube under a slope
+        if !ctx.names[i].ends_with("cyli.dat") {
+            continue;
+        }
+        let mut parent = &*ctx.names[i + 1];
+        if let Some(j) = parent.find(['/', '\\']) {
+            parent = &parent[j..][1..];
+        }
+
+        let studs = [
+            "stud.dat",
+            "studa.dat",
+            "stud26.dat",
+            "stud2.dat",
+            "stud2a.dat",
+            "stud3.dat",
+            "stud3a.dat",
+            "91405s01.dat",
+            "91405s02.dat",
+        ];
+
+        if studs.iter().any(|s| s.eq_ignore_ascii_case(parent)) {
+            return true;
+        } else if parent.eq_ignore_ascii_case("stud4.dat")
+            || parent.eq_ignore_ascii_case("stud4a.dat")
+        {
+            let (scale, _, _) = ctx.transform.to_scale_rotation_translation();
+            if scale.x.abs() == 6.0 {
+                return true;
+            }
+        }
+    }
+
+    false
 }
