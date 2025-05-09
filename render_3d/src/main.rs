@@ -80,7 +80,7 @@ fn main() {
             },
             #[cfg(feature = "overlay")]
             (
-                bevy::diagnostic::FrameTimeDiagnosticsPlugin,
+                bevy::diagnostic::FrameTimeDiagnosticsPlugin::default(),
                 bevy::diagnostic::EntityCountDiagnosticsPlugin,
                 bevy::render::diagnostic::RenderDiagnosticsPlugin,
                 iyes_perf_ui::PerfUiPlugin,

@@ -103,7 +103,7 @@ fn change_step(
     mut vis: Query<&mut Visibility, WithModelOrStep>,
     viewer_config: Res<ViewerConfig>,
     #[cfg(any(feature = "outline", feature = "overlay"))] children: Query<&Children, WithSolid>,
-    #[cfg(feature = "overlay")] parents: Query<&Parent, WithModelOrStep>,
+    #[cfg(feature = "overlay")] parents: Query<&ChildOf, WithModelOrStep>,
     #[cfg(feature = "overlay")] mut text: Single<&mut Text, With<MyOverlay>>,
     #[cfg(feature = "overlay")] names: Query<&Name>,
 ) {
