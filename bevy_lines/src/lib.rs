@@ -1,7 +1,10 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
 
-use bevy::{asset::load_internal_asset, prelude::*};
+use bevy::{
+    asset::{load_internal_asset, weak_handle},
+    prelude::*,
+};
 use material::PolylineMaterialPlugin;
 use polyline::{PolylineBasePlugin, PolylineRenderPlugin};
 
@@ -15,8 +18,7 @@ pub mod prelude {
 }
 pub struct PolylinePlugin;
 
-pub const SHADER_HANDLE: Handle<Shader> =
-    Handle::weak_from_u128(140984853725022357237948749908138146321);
+pub const SHADER_HANDLE: Handle<Shader> = weak_handle!("1b7e91d6-2fda-4597-b50f-aa2c02741958");
 
 impl Plugin for PolylinePlugin {
     fn build(&self, app: &mut bevy::prelude::App) {

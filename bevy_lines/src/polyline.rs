@@ -17,7 +17,9 @@ use bevy::{
         render_resource::{binding_types::uniform_buffer, *},
         renderer::RenderDevice,
         sync_world::{RenderEntity, SyncToRenderWorld},
-        view::{NoFrustumCulling, ViewUniform, ViewUniforms, VisibilitySystems},
+        view::{
+            self, NoFrustumCulling, ViewUniform, ViewUniforms, VisibilityClass, VisibilitySystems,
+        },
         Extract, Render, RenderApp, RenderSet,
     },
 };
@@ -75,7 +77,8 @@ pub struct Polyline {
 }
 
 #[derive(Debug, Clone, Default, Component)]
-#[require(SyncToRenderWorld)]
+#[require(SyncToRenderWorld, VisibilityClass)]
+#[component(on_add = view::add_visibility_class::<PolylineHandle>)]
 pub struct PolylineHandle(pub Handle<Polyline>);
 
 impl RenderAsset for GpuPolyline {
@@ -85,6 +88,7 @@ impl RenderAsset for GpuPolyline {
 
     fn prepare_asset(
         polyline: Self::SourceAsset,
+        _: AssetId<Self::SourceAsset>,
         render_device: &mut bevy::ecs::system::SystemParamItem<Self::Param>,
     ) -> Result<Self, PrepareAssetError<Self::SourceAsset>> {
         let prepare_buffer = |vertices: &[Vec3], label| {
