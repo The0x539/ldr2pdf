@@ -1,4 +1,5 @@
 use bevy::{
+    asset::{load_internal_asset, weak_handle},
     pbr::{ExtendedMaterial, MaterialExtension, MaterialExtensionPipeline},
     prelude::*,
     render::{
@@ -6,6 +7,23 @@ use bevy::{
         render_resource::*,
     },
 };
+
+const SHADER_HANDLE: Handle<Shader> = weak_handle!("3f143a7b-f598-4e2a-8b52-4413e556bc0a");
+
+pub fn my_material_plugin(app: &mut App) {
+    load_internal_asset!(
+        app,
+        SHADER_HANDLE,
+        "custom_material.wgsl",
+        Shader::from_wgsl
+    );
+
+    app.add_plugins(MaterialPlugin::<MyMaterial> {
+        prepass_enabled: false,
+        shadows_enabled: false,
+        ..default()
+    });
+}
 
 pub const ATTRIBUTE_FLAGS: MeshVertexAttribute =
     MeshVertexAttribute::new("flags", 1000, VertexFormat::Uint32);
@@ -17,11 +35,11 @@ pub struct MyExtension {}
 
 impl MaterialExtension for MyExtension {
     fn fragment_shader() -> ShaderRef {
-        "../src/custom_material.wgsl".into()
+        SHADER_HANDLE.into()
     }
 
     fn vertex_shader() -> ShaderRef {
-        "../src/custom_material.wgsl".into()
+        SHADER_HANDLE.into()
     }
 
     fn specialize(

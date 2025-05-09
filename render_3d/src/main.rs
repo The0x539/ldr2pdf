@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use bevy::{
-    asset::UnapprovedPathMode,
     prelude::*,
     render::{
         RenderPlugin,
@@ -57,27 +56,17 @@ fn main() {
 
     App::new()
         .add_plugins((
-            DefaultPlugins
-                .set(RenderPlugin {
-                    render_creation: RenderCreation::Automatic(WgpuSettings {
-                        backends: Some(Backends::VULKAN),
-                        ..default()
-                    }),
-                    ..default()
-                })
-                .set(AssetPlugin {
-                    // TODO: figure out the correct file_path
-                    unapproved_path_mode: UnapprovedPathMode::Allow,
+            DefaultPlugins.set(RenderPlugin {
+                render_creation: RenderCreation::Automatic(WgpuSettings {
+                    backends: Some(Backends::VULKAN),
                     ..default()
                 }),
+                ..default()
+            }),
             #[cfg(feature = "line")]
             bevy_lines::PolylinePlugin,
             bevy_blendy_cameras::BlendyCamerasPlugin,
-            MaterialPlugin::<material::MyMaterial> {
-                prepass_enabled: false,
-                shadows_enabled: false,
-                ..default()
-            },
+            material::my_material_plugin,
             #[cfg(feature = "overlay")]
             (
                 bevy::diagnostic::FrameTimeDiagnosticsPlugin::default(),
