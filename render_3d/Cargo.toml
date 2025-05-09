@@ -19,11 +19,12 @@ iyes_perf_ui = { git = "https://github.com/IyesGames/iyes_perf_ui", rev = "8e6dd
 bevy_blendy_cameras = "0.7.0"
 # bevy_lines = { path = "../bevy_lines", optional = true }
 
-#[dependencies.bevy_mod_outline]
-#version = "0.9.2"
-#optional = true
-#default-features = false
-#features = ["flood"]
+[dependencies.bevy_mod_outline]
+git = "https://github.com/komadori/bevy_mod_outline"
+rev = "fde31afe4e06de0e9f22f3aa421dcb0c1ad08f90"
+optional = true
+default-features = false
+features = ["flood"]
 
 [dependencies.bevy]
 version = "0.16.0"
@@ -37,9 +38,8 @@ features = [
 ]
 
 [features]
-default = ["overlay"]
+default = ["overlay", "outline"]
 overlay = ["dep:iyes_perf_ui", "bevy/default_font", "dep:indexmap"]
-# outline = ["dep:bevy_mod_outline"]
-outline = []
+outline = ["dep:bevy_mod_outline"]
 # line = ["dep:bevy_lines"]
 line = []

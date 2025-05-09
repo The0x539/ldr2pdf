@@ -1264,6 +1264,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_mod_outline"
+version = "0.10.0"
+source = "git+https://github.com/komadori/bevy_mod_outline?rev=fde31afe4e06de0e9f22f3aa421dcb0c1ad08f90#fde31afe4e06de0e9f22f3aa421dcb0c1ad08f90"
+dependencies = [
+ "bevy 0.16.0",
+ "bitfield",
+ "itertools 0.14.0",
+ "nonmax",
+ "thiserror 1.0.69",
+ "wgpu-types 24.0.0",
+]
+
+[[package]]
 name = "bevy_pbr"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1957,6 +1970,12 @@ name = "bit-vec"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
+
+[[package]]
+name = "bitfield"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c821a6e124197eb56d907ccc2188eab1038fb919c914f47976e64dd8dbc855d1"
 
 [[package]]
 name = "bitflags"
@@ -3500,6 +3519,7 @@ dependencies = [
  "argh",
  "bevy 0.16.0",
  "bevy_blendy_cameras",
+ "bevy_mod_outline",
  "bytemuck",
  "dirs",
  "flat-zip",
