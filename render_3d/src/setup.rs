@@ -163,10 +163,10 @@ fn initial_setup(
 
     commands.spawn((
         Camera3d::default(),
-        PerspectiveProjection {
-            far: 0.01,
+        Projection::from(PerspectiveProjection {
+            far: 1000.0,
             ..default()
-        },
+        }),
         Exposure::INDOOR,
         Transform::from_xyz(90.0, 50.0, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
         OrbitCameraController {
@@ -202,7 +202,7 @@ fn initial_setup(
 
 fn unload_model(root: Option<Single<Entity, With<SceneRoot>>>, mut commands: Commands) {
     if let Some(root) = root {
-        commands.entity(*root).despawn_recursive();
+        commands.entity(*root).despawn();
     }
 }
 
@@ -217,7 +217,7 @@ fn finalize_loading(
     transform_helper: TransformHelper,
 ) {
     let mut sequence: Vec<Entity> = vec![];
-    traverse_hierarchy(&steps, &models, root.single(), &mut sequence);
+    traverse_hierarchy(&steps, &models, root.single().unwrap(), &mut sequence);
 
     for pair in sequence.windows(2) {
         let a = pair[0];
@@ -353,10 +353,11 @@ impl Handles {
             material.clone(),
             transform,
             Name::new(format!("{color_name} {part_name}")),
+            ChildOf(parent.id()),
+            Visibility::Inherited,
         );
-        let parent_id = parent.id();
+        #[allow(unused_mut)]
         let mut part_entity = parent.commands_mut().spawn(bundle);
-        part_entity.set_parent(parent_id);
 
         #[cfg(feature = "outline")]
         part_entity.insert(bevy_mod_outline::InheritOutline);
@@ -389,11 +390,13 @@ impl Handles {
         assets: &mut ModelAssets,
         model: &traverse::Model,
     ) -> Entity {
-        let parent_id = parent.id();
-
-        let transform = Transform::from_matrix(model.transform);
-        let mut model_entity = parent.commands_mut().spawn(transform);
-        model_entity.set_parent(parent_id);
+        let bundle = (
+            Transform::from_matrix(model.transform),
+            ChildOf(parent.id()),
+            Name::new(model.name.clone()),
+            Visibility::Inherited,
+        );
+        let mut model_entity = parent.commands_mut().spawn(bundle);
 
         let mut model_component = Model {
             name: model.name.clone(),
@@ -410,7 +413,6 @@ impl Handles {
         model_entity.insert(bevy_mod_outline::InheritOutline);
 
         model_entity.insert(model_component);
-        model_entity.insert(Name::new(model.name.clone()));
         model_entity.id()
     }
 
@@ -421,10 +423,12 @@ impl Handles {
         step: &traverse::Step,
         index: usize,
     ) -> Entity {
-        let parent_id = parent.id();
-
-        let mut step_entity = parent.commands_mut().spawn_empty();
-        step_entity.set_parent(parent_id);
+        let bundle = (
+            ChildOf(parent.id()),
+            Visibility::Inherited,
+            Transform::IDENTITY,
+        );
+        let mut step_entity = parent.commands_mut().spawn(bundle);
 
         let mut step_component = Step {
             items: vec![],

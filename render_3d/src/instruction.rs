@@ -82,21 +82,22 @@ fn input(
     if keys.just_pressed(key_bindings.toggle_camera_mode) {
         let (camera_entity, orbit, _fly) = *camera;
         if orbit.is_enabled {
-            fly_event.send(SwitchToFlyController { camera_entity });
+            fly_event.write(SwitchToFlyController { camera_entity });
         } else {
-            orbit_event.send(SwitchToOrbitController { camera_entity });
+            orbit_event.write(SwitchToOrbitController { camera_entity });
         }
     }
 }
 
 type WithModelOrStep = Or<(With<Model>, With<Step>)>;
+#[cfg(any(feature = "outline", feature = "overlay"))]
 type WithSolid = Or<(With<Model>, With<Step>, With<Mesh3d>)>;
 
 fn change_step(
     trigger: Trigger<ChangeStep>,
     mut commands: Commands,
     models: Query<&Model>,
-    steps: Query<(&Step, &Parent)>,
+    steps: Query<(&Step, &ChildOf)>,
     step_sequence: Query<&DoublyLinked>,
     mut current_step: ResMut<CurrentStep>,
     mut vis: Query<&mut Visibility, WithModelOrStep>,
@@ -132,8 +133,8 @@ fn change_step(
         ChangeStep::Refresh => {}
     }
 
-    let old_model_id = steps.get(old_step_id).unwrap().1.get();
-    let model_id = steps.get(*step_id).unwrap().1.get();
+    let old_model_id = steps.get(old_step_id).unwrap().1.parent();
+    let model_id = steps.get(*step_id).unwrap().1.parent();
 
     if viewer_config.focus_submodels {
         if old_model_id != model_id {
