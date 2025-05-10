@@ -133,9 +133,12 @@ fn load_model(
         },
         Transform::from_matrix(base_transform()),
     ));
+    let scene_root_id = scene_root.id();
 
-    let model_root = handles.spawn_model(scene_root, &mut model_assets, &model);
-    commands.entity(model_root).insert(ModelRoot);
+    let model_root = handles.spawn_model(commands.reborrow(), &mut model_assets, &model);
+    commands
+        .entity(model_root)
+        .insert((ModelRoot, ChildOf(scene_root_id)));
 }
 
 pub fn base_transform() -> Mat4 {
@@ -346,37 +349,30 @@ impl Handles {
             .insert(part_color, assets.materials.add(material));
     }
 
-    fn spawn_part(&self, mut parent: EntityCommands, part: &traverse::Part) -> Entity {
-        let ph = self.part[&part.id].clone();
-
-        let material = MeshMaterial3d(self.material[&part.color].clone());
-
-        let transform = Transform::from_matrix(part.transform);
+    fn spawn_part(&self, mut commands: Commands, part_data: &traverse::Part) -> Entity {
+        let ph = self.part[&part_data.id].clone();
+        let material = self.material[&part_data.color].clone();
 
         let part_name = ph.name.replace("  ", " ");
         let color_name = self
             .color_map
-            .by_code(part.color)
+            .by_code(part_data.color)
             .name
             .replace("Trans_", "Trans-")
             .replace("_", " ");
 
-        let bundle = (
-            Mesh3d(ph.mesh),
-            material.clone(),
-            transform,
-            Name::new(format!("{color_name} {part_name}")),
-            ChildOf(parent.id()),
-            Visibility::Inherited,
-        );
         #[allow(unused_mut)]
-        let mut part_entity = parent.commands_mut().spawn(bundle);
-
-        #[cfg(feature = "outline")]
-        part_entity.insert(bevy_mod_outline::InheritOutline);
+        let mut part = commands.spawn((
+            Mesh3d(ph.mesh),
+            MeshMaterial3d(material),
+            Transform::from_matrix(part_data.transform),
+            Name::new(format!("{color_name} {part_name}")),
+            #[cfg(feature = "outline")]
+            bevy_mod_outline::InheritOutline,
+        ));
 
         #[cfg(feature = "line")]
-        part_entity.with_children(|c| {
+        part.with_children(|c| {
             c.spawn(PolylineBundle {
                 polyline: PolylineHandle(ph.line),
                 material: self.line_material.clone(),
@@ -394,61 +390,60 @@ impl Handles {
             }
         });
 
-        part_entity.id()
+        part.id()
     }
 
     fn spawn_model(
         &mut self,
-        mut parent: EntityCommands,
+        mut commands: Commands,
         assets: &mut ModelAssets,
-        model: &traverse::Model,
+        model_data: &traverse::Model,
     ) -> Entity {
-        let bundle = (
-            Transform::from_matrix(model.transform),
-            ChildOf(parent.id()),
-            Name::new(model.name.clone()),
+        let mut model = commands.spawn((
+            Transform::from_matrix(model_data.transform),
+            Name::new(model_data.name.clone()),
             Model,
             #[cfg(feature = "outline")]
             bevy_mod_outline::InheritOutline,
-        );
-        let mut model_entity = parent.commands_mut().spawn(bundle);
+        ));
 
-        for (index, step) in model.steps.iter().enumerate() {
-            self.spawn_step(model_entity.reborrow(), assets, step, index);
+        for (index, step) in model_data.steps.iter().enumerate() {
+            let step_id = self.spawn_step(model.commands(), assets, step, index);
+            model.add_child(step_id);
         }
 
-        model_entity.id()
+        model.id()
     }
 
     fn spawn_step(
         &mut self,
-        mut parent: EntityCommands,
+        mut commands: Commands,
         assets: &mut ModelAssets,
-        step: &traverse::Step,
+        step_data: &traverse::Step,
         index: usize,
     ) -> Entity {
-        let bundle = (ChildOf(parent.id()), Step { index });
+        let bundle = (Step { index },);
+        let mut step = commands.spawn(bundle);
 
-        let mut step_entity = parent.commands_mut().spawn(bundle);
-
-        if let Some(name) = &step.name {
-            step_entity.insert(Name::new(name.to_owned()));
+        if let Some(name) = &step_data.name {
+            step.insert(Name::new(name.to_owned()));
         }
 
-        for item in &step.items {
-            let step_entity = step_entity.reborrow();
-            match item {
+        for item in &step_data.items {
+            let commands = step.commands();
+            let item_id = match item {
                 traverse::StepItem::Part(part) => {
                     self.load_part(part, assets);
                     self.load_material(part.color, assets);
-                    self.spawn_part(step_entity, part);
+                    self.spawn_part(commands, part)
                 }
                 traverse::StepItem::Submodel(submodel) => {
-                    self.spawn_model(step_entity, assets, submodel);
+                    self.spawn_model(commands, assets, submodel)
                 }
-            }
+            };
+            step.add_child(item_id);
         }
 
-        step_entity.id()
+        step.id()
     }
 }
