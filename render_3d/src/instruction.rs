@@ -102,7 +102,7 @@ fn change_step(
     mut current_step: ResMut<CurrentStep>,
     mut vis: Query<&mut Visibility, WithModelOrStep>,
     viewer_config: Res<ViewerConfig>,
-    #[cfg(any(feature = "outline", feature = "overlay"))] children: Query<&Children, WithSolid>,
+    children: Query<&Children, WithSolid>,
     #[cfg(feature = "overlay")] parents: Query<&ChildOf, WithModelOrStep>,
     #[cfg(feature = "overlay")] mut text: Single<&mut Text, With<MyOverlay>>,
     #[cfg(feature = "overlay")] names: Query<&Name>,
@@ -217,10 +217,8 @@ fn change_step(
         }
     }
 
-    let model = models.get(model_id).unwrap();
-
-    for (i, step_id) in model.steps.iter().enumerate() {
-        *vis.get_mut(*step_id).unwrap() = if i <= show_up_to {
+    for (i, step_id) in children.get(model_id).unwrap().iter().enumerate() {
+        *vis.get_mut(step_id).unwrap() = if i <= show_up_to {
             if viewer_config.focus_submodels {
                 Visibility::Inherited
             } else {

@@ -56,8 +56,6 @@ pub struct SceneRoot;
 #[require(Transform, Visibility)]
 pub struct Model {
     pub name: String,
-    pub steps: Vec<Entity>,
-    // pub true_parent: Entity,
 }
 
 #[derive(Debug, Component)]
@@ -210,14 +208,21 @@ fn finalize_loading(
     mut commands: Commands,
     steps: Query<&Step>,
     models: Query<&Model>,
-    root: Query<&Model, With<ModelRoot>>,
+    children: Query<&Children>,
+    root: Query<Entity, With<ModelRoot>>,
     mut links: Query<&mut DoublyLinked>,
     mut current_step: ResMut<CurrentStep>,
     model_entities: Query<(Entity, &Transform), With<Model>>,
     transform_helper: TransformHelper,
 ) {
     let mut sequence: Vec<Entity> = vec![];
-    traverse_hierarchy(&steps, &models, root.single().unwrap(), &mut sequence);
+    traverse_hierarchy(
+        &steps,
+        &models,
+        &children,
+        root.single().unwrap(),
+        &mut sequence,
+    );
 
     for pair in sequence.windows(2) {
         let a = pair[0];
@@ -253,20 +258,21 @@ fn finalize_loading(
 fn traverse_hierarchy(
     steps: &Query<&Step>,
     models: &Query<&Model>,
+    children: &Query<&Children>,
 
-    current_model: &Model,
+    current_model: Entity,
     sequence: &mut Vec<Entity>,
 ) {
     // to avoid including multiple copies of instructions for the same model in the same set
     let mut seen = HashSet::new();
 
-    for &step_id in &current_model.steps {
+    for &step_id in children.get(current_model).unwrap() {
         seen.clear();
         let step = steps.get(step_id).unwrap();
         for &item_id in &step.items {
             if let Ok(submodel) = models.get(item_id) {
                 if seen.insert(&submodel.name) {
-                    traverse_hierarchy(steps, models, submodel, sequence);
+                    traverse_hierarchy(steps, models, children, item_id, sequence);
                 }
             }
         }
@@ -398,15 +404,12 @@ impl Handles {
         );
         let mut model_entity = parent.commands_mut().spawn(bundle);
 
-        let mut model_component = Model {
+        let model_component = Model {
             name: model.name.clone(),
-            steps: vec![],
-            // true_parent: parent_id,
         };
 
         for (index, step) in model.steps.iter().enumerate() {
-            let step_entity = self.spawn_step(model_entity.reborrow(), assets, step, index);
-            model_component.steps.push(step_entity);
+            self.spawn_step(model_entity.reborrow(), assets, step, index);
         }
 
         #[cfg(feature = "outline")]
@@ -422,7 +425,7 @@ impl Handles {
         assets: &mut ModelAssets,
         step: &traverse::Step,
         index: usize,
-    ) -> Entity {
+    ) {
         let bundle = (
             ChildOf(parent.id()),
             Visibility::Inherited,
@@ -456,7 +459,5 @@ impl Handles {
         if let Some(name) = &step.name {
             step_entity.insert(Name::new(name.to_owned()));
         }
-
-        step_entity.id()
     }
 }
