@@ -155,12 +155,9 @@ fn change_step(
     {
         use bevy_mod_outline::{ComputedOutline, InheritOutline, OutlineMode, OutlineVolume};
 
-        type AnyOutline = (OutlineVolume, InheritOutline, ComputedOutline);
-
-        commands.entity(old_step_id).remove::<AnyOutline>();
-        for child in children.iter_descendants(old_step_id) {
-            commands.entity(child).remove::<AnyOutline>();
-        }
+        commands
+            .entity(old_step_id)
+            .remove_recursive::<Children, (OutlineVolume, InheritOutline, ComputedOutline)>();
 
         let outline = (
             OutlineVolume {
@@ -171,10 +168,13 @@ fn change_step(
             OutlineMode::FloodFlat,
         );
 
-        commands.entity(*step_id).insert(outline);
-        for child in children.iter_descendants(*step_id) {
-            commands.entity(child).insert(InheritOutline);
-        }
+        commands
+            .entity(*step_id)
+            .insert_recursive::<Children>(InheritOutline);
+        commands
+            .entity(*step_id)
+            .remove::<InheritOutline>()
+            .insert(outline);
     }
 
     #[cfg(feature = "overlay")]
