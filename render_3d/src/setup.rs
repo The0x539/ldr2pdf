@@ -54,14 +54,11 @@ pub struct SceneRoot;
 
 #[derive(Debug, Component)]
 #[require(Transform, Visibility)]
-pub struct Model {
-    pub name: String,
-}
+pub struct Model;
 
 #[derive(Debug, Component)]
 #[require(Transform, Visibility, DoublyLinked)]
 pub struct Step {
-    pub items: Vec<Entity>,
     pub index: usize,
 }
 
@@ -207,7 +204,7 @@ fn unload_model(root: Option<Single<Entity, With<SceneRoot>>>, mut commands: Com
 fn finalize_loading(
     mut commands: Commands,
     steps: Query<&Step>,
-    models: Query<&Model>,
+    model_names: Query<&Name, With<Model>>,
     children: Query<&Children>,
     root: Query<Entity, With<ModelRoot>>,
     mut links: Query<&mut DoublyLinked>,
@@ -218,7 +215,7 @@ fn finalize_loading(
     let mut sequence: Vec<Entity> = vec![];
     traverse_hierarchy(
         &steps,
-        &models,
+        &model_names,
         &children,
         root.single().unwrap(),
         &mut sequence,
@@ -257,7 +254,7 @@ fn finalize_loading(
 
 fn traverse_hierarchy(
     steps: &Query<&Step>,
-    models: &Query<&Model>,
+    model_names: &Query<&Name, With<Model>>,
     children: &Query<&Children>,
 
     current_model: Entity,
@@ -268,13 +265,23 @@ fn traverse_hierarchy(
 
     for &step_id in children.get(current_model).unwrap() {
         seen.clear();
-        let step = steps.get(step_id).unwrap();
-        for &item_id in &step.items {
-            if let Ok(submodel) = models.get(item_id) {
-                if seen.insert(&submodel.name) {
-                    traverse_hierarchy(steps, models, children, item_id, sequence);
-                }
-            }
+        let Ok(step_items) = children.get(step_id) else {
+            continue;
+        };
+        for &item_id in step_items {
+            let Ok(submodel_name) = model_names.get(item_id) else {
+                // this step item is not a submodel (i.e., it is a part)
+                // this means that we don't need to recurse any deeper
+                continue;
+            };
+
+            if !seen.insert(submodel_name) {
+                // this isn't the first copy of this exact submodel within this same step,
+                // so don't bother going over the steps a second/third/etc time
+                continue;
+            };
+
+            traverse_hierarchy(steps, model_names, children, item_id, sequence);
         }
         sequence.push(step_id);
     }
@@ -400,22 +407,16 @@ impl Handles {
             Transform::from_matrix(model.transform),
             ChildOf(parent.id()),
             Name::new(model.name.clone()),
-            Visibility::Inherited,
+            Model,
+            #[cfg(feature = "outline")]
+            bevy_mod_outline::InheritOutline,
         );
         let mut model_entity = parent.commands_mut().spawn(bundle);
-
-        let model_component = Model {
-            name: model.name.clone(),
-        };
 
         for (index, step) in model.steps.iter().enumerate() {
             self.spawn_step(model_entity.reborrow(), assets, step, index);
         }
 
-        #[cfg(feature = "outline")]
-        model_entity.insert(bevy_mod_outline::InheritOutline);
-
-        model_entity.insert(model_component);
         model_entity.id()
     }
 
@@ -425,18 +426,14 @@ impl Handles {
         assets: &mut ModelAssets,
         step: &traverse::Step,
         index: usize,
-    ) {
-        let bundle = (
-            ChildOf(parent.id()),
-            Visibility::Inherited,
-            Transform::IDENTITY,
-        );
+    ) -> Entity {
+        let bundle = (ChildOf(parent.id()), Step { index });
+
         let mut step_entity = parent.commands_mut().spawn(bundle);
 
-        let mut step_component = Step {
-            items: vec![],
-            index,
-        };
+        if let Some(name) = &step.name {
+            step_entity.insert(Name::new(name.to_owned()));
+        }
 
         for item in &step.items {
             let step_entity = step_entity.reborrow();
@@ -444,20 +441,14 @@ impl Handles {
                 traverse::StepItem::Part(part) => {
                     self.load_part(part, assets);
                     self.load_material(part.color, assets);
-                    let part_entity = self.spawn_part(step_entity, part);
-                    step_component.items.push(part_entity);
+                    self.spawn_part(step_entity, part);
                 }
                 traverse::StepItem::Submodel(submodel) => {
-                    let model_entity = self.spawn_model(step_entity, assets, submodel);
-                    step_component.items.push(model_entity);
+                    self.spawn_model(step_entity, assets, submodel);
                 }
             }
         }
 
-        step_entity.insert(step_component);
-
-        if let Some(name) = &step.name {
-            step_entity.insert(Name::new(name.to_owned()));
-        }
+        step_entity.id()
     }
 }

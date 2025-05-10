@@ -96,7 +96,7 @@ type WithSolid = Or<(With<Model>, With<Step>, With<Mesh3d>)>;
 fn change_step(
     trigger: Trigger<ChangeStep>,
     mut commands: Commands,
-    models: Query<&Model>,
+    model_names: Query<&Name, With<Model>>,
     steps: Query<(&Step, &ChildOf)>,
     step_sequence: Query<&DoublyLinked>,
     mut current_step: ResMut<CurrentStep>,
@@ -187,8 +187,8 @@ fn change_step(
         buf.clear();
 
         for id in ids.into_iter().rev() {
-            if let Ok(model) = models.get(id) {
-                buf.push_str(&model.name);
+            if let Ok(model_name) = model_names.get(id) {
+                buf.push_str(model_name);
             } else if let Ok((step, _)) = steps.get(id) {
                 write!(buf, ", step {}", step.index + 1).unwrap();
                 if let Ok(name) = names.get(id) {
