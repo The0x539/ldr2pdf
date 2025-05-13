@@ -22,6 +22,7 @@ use bevy::{
         render_phase::*,
         render_resource::{binding_types::uniform_buffer, *},
         renderer::{RenderDevice, RenderQueue},
+        sync_world::MainEntity,
         view::{ExtractedView, RenderVisibleEntities, ViewUniformOffset},
         Render, RenderApp, RenderSet,
     },
@@ -297,110 +298,97 @@ pub fn queue_material_polylines(
         .read()
         .id::<DrawPolylineMaterial>();
 
+    let mut queue_entity = |entity: (Entity, MainEntity),
+                            mut polyline_key: PolylinePipelineKey,
+                            inverse_view_row_2: Vec4,
+                            view: &ExtractedView| {
+        let (material_handle, polyline_uniform, polyline_handle) =
+            material_meshes.get(entity.0).ok()?;
+
+        let material = render_materials.get(&material_handle.0)?;
+        let polyline = render_polylines.get(&polyline_handle.0)?;
+
+        if material.alpha_mode == AlphaMode::Blend {
+            polyline_key |= PolylinePipelineKey::TRANSPARENT_MAIN_PASS
+        }
+        if material.perspective {
+            polyline_key |= PolylinePipelineKey::PERSPECTIVE
+        }
+        polyline_key.set(
+            PolylinePipelineKey::CONDITIONAL,
+            polyline.control_vertex_buffer.is_some(),
+        );
+        let pipeline_id = pipelines.specialize(&pipeline_cache, &material_pipeline, polyline_key);
+
+        let this_tick = next_tick.get() + 1;
+        next_tick.set(this_tick);
+
+        let rve = &view.retained_view_entity;
+        // The draw command doesn't use a mesh handle, so we don't need an `asset_id`
+        let asset_id = AssetId::<Mesh>::invalid().untyped();
+
+        match material.alpha_mode {
+            AlphaMode::Opaque => opaque_phases.get_mut(rve)?.add(
+                Opaque3dBatchSetKey {
+                    pipeline: pipeline_id,
+                    draw_function: draw_opaque,
+                    material_bind_group_index: None,
+                    lightmap_slab: None,
+                    vertex_slab: default(),
+                    index_slab: None,
+                },
+                Opaque3dBinKey { asset_id },
+                entity,
+                InputUniformIndex::default(),
+                BinnedRenderPhaseType::NonMesh,
+                *next_tick,
+            ),
+            AlphaMode::Mask(_) => alpha_mask_phases.get_mut(rve)?.add(
+                OpaqueNoLightmap3dBatchSetKey {
+                    draw_function: draw_alpha_mask,
+                    pipeline: pipeline_id,
+                    material_bind_group_index: None,
+                    vertex_slab: default(),
+                    index_slab: None,
+                },
+                OpaqueNoLightmap3dBinKey { asset_id },
+                entity,
+                InputUniformIndex::default(),
+                BinnedRenderPhaseType::NonMesh,
+                *next_tick,
+            ),
+            AlphaMode::Blend | AlphaMode::Premultiplied | AlphaMode::Add | AlphaMode::Multiply => {
+                transparent_phases.get_mut(rve)?.add(Transparent3d {
+                    entity,
+                    draw_function: draw_transparent,
+                    pipeline: pipeline_id,
+                    // NOTE: Back-to-front ordering for transparent with ascending sort means far should have the
+                    // lowest sort key and getting closer should increase. As we have
+                    // -z in front of the camera, the largest distance is -far with values increasing toward the
+                    // camera. As such we can just use mesh_z as the distance
+                    distance: {
+                        // NOTE: row 2 of the inverse view matrix dotted with column 3 of the model matrix
+                        // gives the z component of translation of the mesh in view space
+                        inverse_view_row_2.dot(polyline_uniform.transform.col(3))
+                    },
+                    batch_range: 0..1,
+                    extra_index: PhaseItemExtraIndex::None,
+                    indexed: false,
+                })
+            }
+        }
+        Some(())
+    };
+
     for (view, visible_entities, msaa) in &views {
         let inverse_view_matrix = view.world_from_view.compute_matrix().inverse();
         let inverse_view_row_2 = inverse_view_matrix.row(2);
 
-        let mut polyline_key = PolylinePipelineKey::from_msaa_samples(msaa.samples());
-        polyline_key |= PolylinePipelineKey::from_hdr(view.hdr);
-        for (visible_entity, visible_main_entity) in visible_entities.get::<PolylineHandle>() {
-            let Ok((material_handle, polyline_uniform, polyline_handle)) =
-                material_meshes.get(*visible_entity)
-            else {
-                continue;
-            };
-            let Some(material) = render_materials.get(&material_handle.0) else {
-                continue;
-            };
-            let Some(polyline) = render_polylines.get(&polyline_handle.0) else {
-                continue;
-            };
-            if material.alpha_mode == AlphaMode::Blend {
-                polyline_key |= PolylinePipelineKey::TRANSPARENT_MAIN_PASS
-            }
-            if material.perspective {
-                polyline_key |= PolylinePipelineKey::PERSPECTIVE
-            }
-            // TODO: Are the other pipeline keys supposed to also behave like this?
-            polyline_key.set(
-                PolylinePipelineKey::CONDITIONAL,
-                polyline.control_vertex_buffer.is_some(),
-            );
-            let pipeline_id =
-                pipelines.specialize(&pipeline_cache, &material_pipeline, polyline_key);
+        let polyline_key = PolylinePipelineKey::from_msaa_samples(msaa.samples())
+            | PolylinePipelineKey::from_hdr(view.hdr);
 
-            let (Some(opaque_phase), Some(alpha_mask_phase), Some(transparent_phase)) = (
-                opaque_phases.get_mut(&view.retained_view_entity),
-                alpha_mask_phases.get_mut(&view.retained_view_entity),
-                transparent_phases.get_mut(&view.retained_view_entity),
-            ) else {
-                continue;
-            };
-
-            let this_tick = next_tick.get() + 1;
-            next_tick.set(this_tick);
-
-            match material.alpha_mode {
-                AlphaMode::Opaque => {
-                    opaque_phase.add(
-                        Opaque3dBatchSetKey {
-                            pipeline: pipeline_id,
-                            draw_function: draw_opaque,
-                            material_bind_group_index: None,
-                            lightmap_slab: None,
-                            vertex_slab: default(),
-                            index_slab: None,
-                        },
-                        Opaque3dBinKey {
-                            // The draw command doesn't use a mesh handle so we don't need an `asset_id`
-                            asset_id: AssetId::<Mesh>::invalid().untyped(),
-                        },
-                        (*visible_entity, *visible_main_entity),
-                        InputUniformIndex::default(),
-                        BinnedRenderPhaseType::NonMesh,
-                        *next_tick,
-                    );
-                }
-                AlphaMode::Mask(_) => {
-                    alpha_mask_phase.add(
-                        OpaqueNoLightmap3dBatchSetKey {
-                            draw_function: draw_alpha_mask,
-                            pipeline: pipeline_id,
-                            material_bind_group_index: None,
-                            vertex_slab: default(),
-                            index_slab: None,
-                        },
-                        OpaqueNoLightmap3dBinKey {
-                            asset_id: AssetId::<Mesh>::invalid().untyped(),
-                        },
-                        (*visible_entity, *visible_main_entity),
-                        InputUniformIndex::default(),
-                        BinnedRenderPhaseType::NonMesh,
-                        *next_tick,
-                    );
-                }
-                AlphaMode::Blend
-                | AlphaMode::Premultiplied
-                | AlphaMode::Add
-                | AlphaMode::Multiply => {
-                    // NOTE: row 2 of the inverse view matrix dotted with column 3 of the model matrix
-                    // gives the z component of translation of the mesh in view space
-                    let polyline_z = inverse_view_row_2.dot(polyline_uniform.transform.col(3));
-                    transparent_phase.add(Transparent3d {
-                        entity: (*visible_entity, *visible_main_entity),
-                        draw_function: draw_transparent,
-                        pipeline: pipeline_id,
-                        // NOTE: Back-to-front ordering for transparent with ascending sort means far should have the
-                        // lowest sort key and getting closer should increase. As we have
-                        // -z in front of the camera, the largest distance is -far with values increasing toward the
-                        // camera. As such we can just use mesh_z as the distance
-                        distance: polyline_z,
-                        batch_range: 0..1,
-                        extra_index: PhaseItemExtraIndex::None,
-                        indexed: false,
-                    });
-                }
-            }
+        for entity in visible_entities.get::<PolylineHandle>() {
+            queue_entity(*entity, polyline_key, inverse_view_row_2, view);
         }
     }
 }
